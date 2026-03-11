@@ -1,113 +1,226 @@
-# AI-Bridge
+<div align="center">
 
-<p align="center">
-  <img src="docs/assets/logo.png" alt="AI-Bridge Logo" width="200">
-</p>
+```
+     _    ___      ____       _     _            
+    / \  |_ _|    | __ ) _ __(_) __| | __ _  ___ 
+   / _ \  | |_____|  _ \| '__| |/ _` |/ _` |/ _ \
+  / ___ \ | |_____| |_) | |  | | (_| | (_| |  __/
+ /_/   \_\___|    |____/|_|  |_|\__,_|\__, |\___|
+                                      |___/      
+```
 
-<p align="center">
-  <strong>The "USB-C" for AI Automation — Bridge AI Assistants to GUI Applications</strong>
-</p>
+# 🌉 AI-Bridge
 
-<p align="center">
-  <a href="https://github.com/Louis830903/AI-Bridge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
-  <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python"></a>
-  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-compatible-green.svg" alt="MCP"></a>
-</p>
+### **The "USB-C" for AI Automation**
+### **AI 自动化领域的"万能接口"**
 
-<p align="center">
-  <a href="README_CN.md">中文文档</a> | 
-  <a href="docs/DEVELOPMENT_PLAN.md">Development Plan</a> |
-  <a href="docs/AAIP_SPEC.md">AAIP Specification</a>
-</p>
+<br/>
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-00D084?style=for-the-badge&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen?style=for-the-badge)](CONTRIBUTING.md)
+
+<br/>
+
+**🚀 One Protocol. Any AI. Every App.**
+
+**🚀 一个协议，连接所有 AI，操控所有应用**
+
+<br/>
+
+[📖 Documentation](#quick-start) • [🎯 Features](#-superpowers) • [🌍 Supported Apps](#-supported-platforms) • [🚀 Quick Start](#-quick-start)
+
+[📖 文档](#quick-start) • [🎯 功能特性](#-superpowers) • [🌍 支持平台](#-supported-platforms) • [🚀 快速开始](#-quick-start)
 
 ---
 
-## What is AI-Bridge?
+<br/>
 
-**AI-Bridge** is an open-source infrastructure layer that enables AI assistants to interact with GUI applications through a standardized protocol. Think of it as the **"USB-C" for AI automation** — one universal interface to connect any AI to any application.
+<img src="https://raw.githubusercontent.com/Louis830903/AI-Bridge/main/docs/assets/demo.gif" alt="AI-Bridge Demo" width="800"/>
 
-### The Problem
+</div>
 
-Current AI automation approaches are fragmented and unreliable:
+<br/>
 
-```
-AI Assistant → Screenshot → OCR → Coordinate Calculation → Mouse Click
-                    ↓
-            Slow, Unstable, Error-prone
-```
+## 🔥 Why AI-Bridge? | 为什么选择 AI-Bridge？
 
-### Our Solution
+<table>
+<tr>
+<td width="50%">
 
-AI-Bridge provides a semantic, standardized interface:
+### ❌ The Old Way | 传统方式
 
 ```
-AI Assistant → MCP Protocol → AI-Bridge → Native App API
-                    ↓
-            Fast, Reliable, Predictable
+AI → Screenshot → OCR → Coordinates → Click
+        ↓
+   🐢 Slow (seconds)
+   💥 Unstable (breaks often)
+   🎯 Inaccurate (wrong clicks)
+   🌍 No i18n (OCR fails)
 ```
 
-## Key Features
+</td>
+<td width="50%">
 
-- **MCP Compatible** — Works with Claude, GPT, Qwen, and any MCP-compatible AI
-- **Global + China** — 13 IM platforms: WhatsApp, Messenger, Telegram, Slack, Teams, Discord, LINE, Viber, KakaoTalk, Feishu, DingTalk, WeCom, Google Chat
-- **Glue Code Architecture** — Lightweight wrappers around mature libraries
-- **Protocol-Driven** — AAIP (AI Application Interaction Protocol) standard
-- **Extensible** — Easy to add new adapters
+### ✅ The AI-Bridge Way | AI-Bridge 方式
 
-## Supported Applications
+```
+AI → MCP Protocol → AI-Bridge → Native API
+        ↓
+   ⚡ Fast (milliseconds)
+   🔒 Stable (native calls)
+   🎯 Precise (semantic)
+   🌍 Global + China ready
+```
 
-| Category | Applications | Status |
-|----------|-------------|--------|
-| **Browser** | Chrome, Edge | ✅ Ready |
-| **Global IM (Enterprise)** | Slack, Microsoft Teams, Discord, Google Chat | ✅ Ready |
-| **Global IM (Consumer)** | WhatsApp, Messenger, Telegram, LINE, Viber, KakaoTalk | ✅ Ready |
-| **China IM** | Feishu (飞书), DingTalk (钉钉), WeCom (企业微信) | ✅ Ready |
-| **Office** | Word, Excel, PowerPoint, WPS | ✅ Ready |
-| **Desktop** | Any Windows App (via UIA) | ✅ Ready |
+</td>
+</tr>
+</table>
 
-## Quick Start
+<br/>
 
-### Installation
+## ⚡ Superpowers
+
+<div align="center">
+
+| 🤖 **Universal AI** | 🌏 **13 IM Platforms** | 📊 **Office Suite** | 🖥️ **Any Desktop App** |
+|:---:|:---:|:---:|:---:|
+| Claude, GPT, Qwen, Gemini, OpenClaw, and any MCP-compatible AI | WhatsApp, Telegram, Slack, Teams, Discord, Feishu, DingTalk, WeCom, LINE, Viber, Messenger, KakaoTalk, Google Chat | Word, Excel, PowerPoint, WPS Office | Windows UIA, Chrome, Edge |
+
+</div>
+
+<br/>
+
+## 🌍 Supported Platforms
+
+<div align="center">
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           🌐 GLOBAL + CHINA COVERAGE                         │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   💬 INSTANT MESSAGING (13 Platforms)                                        │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  🌍 Global Enterprise    │  🌍 Global Consumer   │  🇨🇳 China        │   │
+│   │  ├─ Slack               │  ├─ WhatsApp          │  ├─ 飞书 Feishu   │   │
+│   │  ├─ Microsoft Teams     │  ├─ Telegram          │  ├─ 钉钉 DingTalk │   │
+│   │  ├─ Discord             │  ├─ Messenger         │  └─ 企微 WeCom    │   │
+│   │  └─ Google Chat         │  ├─ LINE              │                   │   │
+│   │                         │  ├─ Viber             │                   │   │
+│   │                         │  └─ KakaoTalk         │                   │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   🌐 BROWSER                  📄 OFFICE                 🖥️ DESKTOP          │
+│   ├─ Chrome                  ├─ Microsoft Word         ├─ Any Windows App   │
+│   └─ Edge                    ├─ Microsoft Excel        └─ via UI Automation │
+│                              ├─ Microsoft PowerPoint                        │
+│                              └─ WPS Office (CN)                             │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+</div>
+
+<br/>
+
+## 🏗️ Architecture | 架构
+
+```
+                              ╔═══════════════════════════════════════════╗
+                              ║           🤖 AI ASSISTANTS                ║
+                              ║  Claude │ GPT │ Qwen │ Gemini │ OpenClaw  ║
+                              ╚═══════════════════════════════════════════╝
+                                                  │
+                                                  │ MCP Protocol
+                                                  ▼
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                              🌉 AI-BRIDGE CORE                                  ║
+║  ┌────────────────────────────────────────────────────────────────────────┐   ║
+║  │                         📡 MCP Server                                   │   ║
+║  │              JSON-RPC Handler │ Router │ Response Builder               │   ║
+║  └────────────────────────────────────────────────────────────────────────┘   ║
+║  ┌────────────────────────────────────────────────────────────────────────┐   ║
+║  │                      🔌 Adapter Manager                                 │   ║
+║  │             Registration │ Lifecycle │ Dispatch │ Health Check          │   ║
+║  └────────────────────────────────────────────────────────────────────────┘   ║
+║  ┌────────────────────────────────────────────────────────────────────────┐   ║
+║  │                      📋 AAIP Protocol Engine                            │   ║
+║  │              Semantic Actions │ Element Locators │ Responses            │   ║
+║  └────────────────────────────────────────────────────────────────────────┘   ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+                                          │
+            ┌─────────────────────────────┼─────────────────────────────┐
+            ▼                             ▼                             ▼
+┌─────────────────────┐      ┌─────────────────────┐      ┌─────────────────────┐
+│   🌐 Browser        │      │   💬 IM             │      │   📊 Office         │
+│   ─────────────     │      │   ─────────────     │      │   ─────────────     │
+│   Chrome │ Edge     │      │   13 Platforms      │      │   Word │ Excel      │
+│   [Playwright]      │      │   [REST APIs]       │      │   PPT │ WPS         │
+│                     │      │                     │      │   [win32com]        │
+└─────────────────────┘      └─────────────────────┘      └─────────────────────┘
+            │                             │                             │
+            ▼                             ▼                             ▼
+    ┌───────────┐                ┌───────────────┐              ┌───────────┐
+    │  Webpages │                │  Chat/Channel │              │ Documents │
+    └───────────┘                └───────────────┘              └───────────┘
+```
+
+<br/>
+
+## 🚀 Quick Start
+
+### Installation | 安装
 
 ```bash
+# Basic installation | 基础安装
 pip install ai-bridge
 
-# With all adapters
+# Full installation (all adapters) | 完整安装
 pip install ai-bridge[all]
 
-# Specific adapters
-pip install ai-bridge[browser,im,office]
+# Selective installation | 按需安装
+pip install ai-bridge[browser]      # Chrome, Edge
+pip install ai-bridge[im]           # All 13 IM platforms
+pip install ai-bridge[office]       # Word, Excel, PPT, WPS
+pip install ai-bridge[china]        # Feishu, DingTalk, WeCom
 ```
 
-### Basic Usage
+### 30-Second Demo | 30秒上手
 
 ```python
 from aibridge import AIBridge
 
-# Initialize
 bridge = AIBridge()
 
-# Chrome automation
-await bridge.execute("chrome", "goto", "https://example.com")
-await bridge.execute("chrome", "click", {"name": "Submit"})
+# 🌐 Browser Automation | 浏览器自动化
+await bridge.execute("chrome", "goto", "https://github.com")
+await bridge.execute("chrome", "click", {"name": "Sign in"})
 
-# Send Feishu message
-await bridge.execute("feishu", "send", {
-    "chat_id": "oc_xxx",
-    "text": "Hello from AI-Bridge!"
+# 💬 Send to Slack
+await bridge.execute("slack", "send_message", {
+    "channel": "#general",
+    "text": "🚀 Deployed by AI-Bridge!"
 })
 
-# Excel automation
+# 💬 发送飞书消息
+await bridge.execute("feishu", "send", {
+    "chat_id": "oc_xxx",
+    "text": "🚀 AI-Bridge 部署成功！"
+})
+
+# 📊 Excel Automation | Excel 自动化
 await bridge.execute("excel", "write", {
     "file": "report.xlsx",
     "cell": "A1",
-    "value": "Sales Report"
+    "value": "AI-Generated Report"
 })
 ```
 
-### Claude Desktop Integration
+### Claude Desktop Integration | Claude Desktop 集成
 
-Add to your Claude Desktop config (`claude_desktop_config.json`):
+Add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -116,190 +229,223 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
       "command": "python",
       "args": ["-m", "aibridge"],
       "env": {
-        "FEISHU_APP_ID": "your_app_id",
-        "FEISHU_APP_SECRET": "your_secret"
+        "SLACK_BOT_TOKEN": "xoxb-xxx",
+        "FEISHU_APP_ID": "cli_xxx",
+        "FEISHU_APP_SECRET": "xxx"
       }
     }
   }
 }
 ```
 
-## Architecture
+<br/>
 
-```
-┌─────────────────────────────────────────────────┐
-│              AI Assistants                       │
-│    Claude | GPT | Qwen | OpenClaw | Custom      │
-└─────────────────────────────────────────────────┘
-                        │ MCP Protocol
-                        ▼
-┌─────────────────────────────────────────────────┐
-│              AI-Bridge Core                      │
-│   ┌─────────────────────────────────────────┐  │
-│   │           MCP Server                     │  │
-│   │    Protocol Parser / Router / Response   │  │
-│   └─────────────────────────────────────────┘  │
-│   ┌─────────────────────────────────────────┐  │
-│   │         Adapter Manager                  │  │
-│   │   Registration / Lifecycle / Dispatch    │  │
-│   └─────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        ▼               ▼               ▼
-┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-│   Browser   │ │     IM      │ │   Office    │
-│   Adapter   │ │   Adapter   │ │   Adapter   │
-│ [Playwright]│ │ [HTTP API]  │ │  [win32com] │
-└─────────────┘ └─────────────┘ └─────────────┘
-```
+## 📡 AAIP Protocol | 协议规范
 
-## AAIP Protocol
-
-AI-Bridge defines the **AI Application Interaction Protocol (AAIP)** — a standard for AI-to-GUI communication:
+**AI Application Interaction Protocol** — The standard for AI-to-GUI communication.
 
 ```yaml
-# Request Format
+# Request Format | 请求格式
 Request:
-  app: string       # Target application ID
-  action: string    # Operation type
-  target: object    # Element locator
-  value: any        # Operation value
-  options: object   # Additional options
+  app: "chrome" | "slack" | "feishu" | "excel" | ...
+  action: "click" | "type" | "read" | "send" | ...
+  target:
+    name: "Submit Button"      # By text | 按文本
+    css: "#submit-btn"         # By CSS | 按CSS
+    xpath: "//button[@id='x']" # By XPath
+    automation_id: "btn_001"   # By UIA ID
+  value: any
+  options:
+    timeout: 5000
+    wait_after: 1000
 
-# Response Format
+# Response Format | 响应格式
 Response:
-  success: bool
-  data: any
-  error: string
-  screenshot: string  # Base64 (optional)
+  success: true
+  data: { ... }
+  screenshot: "base64..."  # Optional
 ```
 
-### Standard Actions
+### Standard Actions | 标准操作
 
-| Action | Description |
-|--------|-------------|
-| `click` | Click element |
-| `type` | Input text |
-| `read` | Read element text |
-| `screenshot` | Take screenshot |
-| `list_elements` | List interactive elements |
-| `wait` | Wait for element |
-| `launch` | Start application |
-| `close` | Close application |
+| Action | Description | 说明 |
+|--------|-------------|------|
+| `click` | Click element | 点击元素 |
+| `type` | Input text | 输入文本 |
+| `read` | Read element text | 读取文本 |
+| `screenshot` | Capture screen | 截图 |
+| `list_elements` | List interactive elements | 列出可交互元素 |
+| `send` | Send message (IM) | 发送消息 |
+| `launch` | Start application | 启动应用 |
+| `close` | Close application | 关闭应用 |
 
-## Adapters
+<br/>
 
-### Browser Adapter (Chrome/Edge)
+## 💬 IM Platform Examples | 即时通讯示例
+
+<details>
+<summary><b>🔵 Slack</b></summary>
 
 ```python
-# Navigate
-await bridge.execute("chrome", "goto", "https://google.com")
-
-# Click button
-await bridge.execute("chrome", "click", {"name": "Search"})
-
-# Fill input
-await bridge.execute("chrome", "type", {
-    "target": {"css": "input[name='q']"},
-    "value": "AI-Bridge"
+# Send message | 发送消息
+await bridge.execute("slack", "send_message", {
+    "channel": "#engineering",
+    "text": "Build succeeded! ✅"
 })
 
-# Get page content
-result = await bridge.execute("chrome", "read", {"css": "h1"})
+# Send with blocks | 发送富文本
+await bridge.execute("slack", "send_blocks", {
+    "channel": "#alerts",
+    "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "*Alert*: CPU > 90%"}}]
+})
 ```
+</details>
 
-### Feishu Adapter
+<details>
+<summary><b>🟣 Microsoft Teams</b></summary>
 
 ```python
-# List chats
-chats = await bridge.execute("feishu", "list_chats")
-
-# Send message
-await bridge.execute("feishu", "send", {
-    "chat_id": "oc_xxx",
+# Send to channel | 发送到频道
+await bridge.execute("teams", "send_message", {
+    "channel_id": "xxx",
     "text": "Meeting reminder: 3pm today"
 })
 
-# Send card message
-await bridge.execute("feishu", "send_card", {
-    "chat_id": "oc_xxx",
-    "title": "Task Update",
-    "content": "Project completed!"
+# Send adaptive card | 发送自适应卡片
+await bridge.execute("teams", "send_card", {
+    "channel_id": "xxx",
+    "card": {...}
 })
 ```
+</details>
 
-### Slack Adapter
-
-```python
-# Send message
-await bridge.execute("slack", "send_message", {
-    "channel": "#general",
-    "text": "Hello from AI-Bridge!"
-})
-
-# List channels
-channels = await bridge.execute("slack", "list_channels")
-```
-
-### Telegram Adapter
+<details>
+<summary><b>🔵 Telegram</b></summary>
 
 ```python
-# Send message
+# Send message | 发送消息
 await bridge.execute("telegram", "send_message", {
     "chat_id": "123456",
-    "text": "Hello from AI-Bridge!"
+    "text": "Hello from AI-Bridge! 🤖"
 })
 
-# Send photo
+# Send photo | 发送图片
 await bridge.execute("telegram", "send_photo", {
     "chat_id": "123456",
-    "photo": "screenshot.png",
-    "caption": "Today's report"
+    "photo": "report.png",
+    "caption": "Daily Report 📊"
 })
 ```
+</details>
 
-### Discord Adapter
+<details>
+<summary><b>🟣 Discord</b></summary>
 
 ```python
-# Send message
-await bridge.execute("discord", "send_message", {
-    "channel": "channel_id",
-    "text": "Hello from AI-Bridge!"
-})
-
-# Send embed
+# Send embed | 发送嵌入消息
 await bridge.execute("discord", "send_embed", {
     "channel": "channel_id",
-    "embed": {"title": "Report", "description": "Daily summary"}
+    "embed": {
+        "title": "🎉 New Release",
+        "description": "v2.0.0 is now available!",
+        "color": 0x00ff00
+    }
 })
 ```
+</details>
 
-### Office Adapter
+<details>
+<summary><b>🔵 飞书 Feishu</b></summary>
 
 ```python
-# Create Word document
+# 发送文本消息
+await bridge.execute("feishu", "send", {
+    "chat_id": "oc_xxx",
+    "text": "任务已完成 ✅"
+})
+
+# 发送卡片消息
+await bridge.execute("feishu", "send_card", {
+    "chat_id": "oc_xxx",
+    "title": "📊 日报",
+    "content": "今日完成5个任务"
+})
+```
+</details>
+
+<details>
+<summary><b>🔵 钉钉 DingTalk</b></summary>
+
+```python
+# Webhook 消息
+await bridge.execute("dingtalk", "send_webhook", {
+    "text": "⚠️ 服务器告警：CPU 使用率 > 90%"
+})
+
+# 工作通知
+await bridge.execute("dingtalk", "send_work_notice", {
+    "userid_list": ["user1", "user2"],
+    "content": "请审批报销单"
+})
+```
+</details>
+
+<details>
+<summary><b>🟢 企业微信 WeCom</b></summary>
+
+```python
+# 应用消息
+await bridge.execute("wecom", "send", {
+    "touser": "@all",
+    "content": "📢 全员通知：明天团建"
+})
+
+# 群聊消息
+await bridge.execute("wecom", "send_to_chat", {
+    "chatid": "CHATID",
+    "content": "周会改到周四下午"
+})
+```
+</details>
+
+<br/>
+
+## 📊 Office Automation | 办公自动化
+
+```python
+# 📝 Word
 await bridge.execute("word", "create", {
     "path": "report.docx",
-    "content": "Annual Report 2024"
+    "content": "# Annual Report 2024\n\nExecutive Summary..."
 })
 
-# Read Excel cell
-value = await bridge.execute("excel", "read", {
-    "file": "data.xlsx",
-    "sheet": "Sheet1",
-    "cell": "A1"
-})
-
-# Write Excel cell
+# 📊 Excel
 await bridge.execute("excel", "write", {
     "file": "data.xlsx",
-    "cell": "B1",
-    "value": 100
+    "sheet": "Sales",
+    "range": "A1:D10",
+    "data": [["Product", "Q1", "Q2", "Q3"], ...]
+})
+
+# 📽️ PowerPoint
+await bridge.execute("powerpoint", "create", {
+    "path": "deck.pptx",
+    "slides": [
+        {"title": "Q1 Results", "content": "Revenue up 25%"}
+    ]
+})
+
+# 📄 WPS Office (China)
+await bridge.execute("wps", "write", {
+    "file": "报表.xlsx",
+    "cell": "A1",
+    "value": "销售数据"
 })
 ```
 
-## Configuration
+<br/>
+
+## ⚙️ Configuration | 配置
 
 Create `aibridge.yaml`:
 
@@ -309,101 +455,161 @@ server:
   log_level: INFO
 
 adapters:
+  # 🌐 Browser
   chrome:
     enabled: true
     cdp_url: "http://localhost:9222"
   
-  # Global IM
+  # 🌍 Global IM
   slack:
     enabled: true
     bot_token: ${SLACK_BOT_TOKEN}
-    
+  
   teams:
     enabled: true
     tenant_id: ${TEAMS_TENANT_ID}
     client_id: ${TEAMS_CLIENT_ID}
-    client_secret: ${TEAMS_CLIENT_SECRET}
-    
+  
   discord:
     enabled: true
     bot_token: ${DISCORD_BOT_TOKEN}
-    
+  
   telegram:
     enabled: true
     bot_token: ${TELEGRAM_BOT_TOKEN}
   
-  # China IM  
+  # 🇨🇳 China IM
   feishu:
     enabled: true
     app_id: ${FEISHU_APP_ID}
     app_secret: ${FEISHU_APP_SECRET}
-    
+  
   dingtalk:
     enabled: true
     app_key: ${DINGTALK_APP_KEY}
     app_secret: ${DINGTALK_APP_SECRET}
-    
+  
   wecom:
     enabled: true
     corp_id: ${WECOM_CORP_ID}
     corp_secret: ${WECOM_CORP_SECRET}
-    
+  
+  # 📊 Office
   office:
     enabled: true
     visible: true
 ```
 
-## Contributing
+<br/>
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+## 🔌 Extend It | 扩展开发
 
-### Adding a New Adapter
+Create custom adapters in minutes:
 
 ```python
 from aibridge.adapters.base import BaseAdapter, AdapterInfo
 
-class MyAdapter(BaseAdapter):
+class MyAppAdapter(BaseAdapter):
     info = AdapterInfo(
         id="myapp",
         name="My Application",
         type="custom",
-        actions=["click", "type", "read"]
+        actions=["click", "type", "read", "custom_action"]
     )
     
     async def connect(self):
-        # Initialize connection
-        pass
+        """Initialize your app connection"""
+        self.client = MyAppClient()
     
     async def execute(self, action, target=None, value=None, options=None):
-        # Handle actions
-        pass
+        """Handle actions"""
+        if action == "custom_action":
+            return await self.client.do_something(value)
+        # ... handle other actions
 ```
 
-## Roadmap
+<br/>
 
-- [x] Core protocol & MCP Server
-- [x] Browser adapters (Chrome, Edge)
-- [x] Global IM adapters (Slack, Teams, Discord, Telegram)
-- [x] China IM adapters (Feishu, DingTalk, WeCom)
-- [x] Office adapters (MS Office, WPS)
-- [x] Generic desktop adapter (UIA)
-- [ ] Adapter marketplace
-- [ ] Visual workflow builder
-- [ ] Enterprise features
+## 📍 Roadmap | 路线图
 
-## License
+- [x] 🏗️ Core Protocol & MCP Server
+- [x] 🌐 Browser Adapters (Chrome, Edge)
+- [x] 💬 Global IM (Slack, Teams, Discord, Telegram, WhatsApp...)
+- [x] 🇨🇳 China IM (Feishu, DingTalk, WeCom)
+- [x] 📊 Office Suite (MS Office, WPS)
+- [x] 🖥️ Desktop Automation (Windows UIA)
+- [ ] 🏪 Adapter Marketplace
+- [ ] 🎨 Visual Workflow Builder
+- [ ] 🏢 Enterprise Features
+- [ ] 📱 Mobile App Support
+
+<br/>
+
+## 🤝 Contributing | 参与贡献
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+欢迎贡献代码！请查看 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+```bash
+# Clone
+git clone https://github.com/Louis830903/AI-Bridge.git
+cd AI-Bridge/ai-bridge
+
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Submit PR
+```
+
+<br/>
+
+## 📜 License | 许可证
 
 Apache 2.0 — See [LICENSE](LICENSE)
 
-## Links
+<br/>
 
-- [GitHub](https://github.com/Louis830903/AI-Bridge)
-- [Documentation](https://ai-bridge.dev)
-- [AAIP Specification](docs/AAIP_SPEC.md)
-- [Development Plan](docs/DEVELOPMENT_PLAN.md)
+## 🔗 Links | 链接
+
+<div align="center">
+
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github)](https://github.com/Louis830903/AI-Bridge)
+[![Documentation](https://img.shields.io/badge/Docs-blue?style=for-the-badge&logo=readthedocs&logoColor=white)](https://ai-bridge.dev)
+[![Discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/aibridge)
+
+</div>
+
+<br/>
 
 ---
 
-<p align="center">
-  Made with ❤️ for the AI automation community
-</p>
+<div align="center">
+
+### 🌟 Star us on GitHub — it helps!
+
+### 🌟 给我们点个 Star 吧 — 这对我们很重要！
+
+<br/>
+
+**Built with ❤️ for the AI Automation Community**
+
+**为 AI 自动化社区倾心打造**
+
+<br/>
+
+```
+ █████╗ ██╗      ██████╗ ██████╗ ██╗██████╗  ██████╗ ███████╗
+██╔══██╗██║      ██╔══██╗██╔══██╗██║██╔══██╗██╔════╝ ██╔════╝
+███████║██║█████╗██████╔╝██████╔╝██║██║  ██║██║  ███╗█████╗  
+██╔══██║██║╚════╝██╔══██╗██╔══██╗██║██║  ██║██║   ██║██╔══╝  
+██║  ██║██║      ██████╔╝██║  ██║██║██████╔╝╚██████╔╝███████╗
+╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝  ╚═════╝ ╚══════╝
+                                                              
+              One Protocol. Any AI. Every App.
+```
+
+</div>
