@@ -1,10 +1,15 @@
-"""
-Chrome Adapter - Browser automation via Chrome DevTools Protocol
-Glue code wrapping Playwright
+"""Chrome Adapter - Browser automation via Chrome DevTools Protocol
+
+升级版：实现与 Chrome DevTools MCP 同等能力
+- A11y 树快照 + uid 定位
+- 多页面管理
+- 完整的交互操作（hover/drag/press_key）
+- 批量表单填写
 """
 
 import base64
-from typing import Any, Dict, List, Optional
+import json
+from typing import Any, Dict, List, Optional, Union
 from aibridge.adapters.base import BaseAdapter, AdapterInfo, AdapterType
 
 # Lazy import to avoid dependency issues
@@ -21,9 +26,13 @@ def get_playwright():
 
 class ChromeAdapter(BaseAdapter):
     """
-    Chrome browser adapter using Playwright.
+    Chrome browser adapter using Playwright + CDP.
     
-    This is glue code that wraps Playwright for browser automation.
+    实现与 Chrome DevTools MCP 同等能力：
+    - take_snapshot: A11y 树快照，带 uid 定位
+    - 多页面管理: list_pages/select_page/new_page/close_page
+    - 交互操作: hover/drag/press_key/fill_form
+    
     Requires Chrome to be running with remote debugging enabled:
         chrome.exe --remote-debugging-port=9222
     """
@@ -32,15 +41,30 @@ class ChromeAdapter(BaseAdapter):
         id="chrome",
         name="Google Chrome",
         type=AdapterType.BROWSER,
-        version="1.0.0",
+        version="2.0.0",  # 升级版本
         platforms=["windows", "macos", "linux"],
         actions=[
+            # 原有能力
             "goto", "click", "type", "read", "screenshot",
             "list_elements", "wait", "scroll", "back", "forward",
-            "reload", "execute", "focus"
+            "reload", "execute", "focus",
+            # 新增能力 - A11y 快照
+            "take_snapshot",
+            # 新增能力 - 多页面管理
+            "list_pages", "select_page", "new_page", "close_page",
+            # 新增能力 - 更多交互
+            "hover", "drag", "press_key", "fill_form",
+            # 新增能力 - 网络/控制台
+            "get_url", "get_title",
         ],
-        description="Chrome browser automation via CDP",
+        description="Chrome browser automation via CDP - 同 Chrome DevTools MCP 同等能力",
     )
+    
+    # 配置常量
+    DEFAULT_SCROLL_DISTANCE = 500
+    MAX_INTERACTIVE_ELEMENTS = 50
+    MAX_TEXT_LENGTH = 100
+    DEFAULT_TIMEOUT = 10000
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
@@ -48,6 +72,8 @@ class ChromeAdapter(BaseAdapter):
         self._playwright = None
         self._browser = None
         self._page = None
+        # A11y 快照中的元素缓存，用于 uid 定位（实例变量，避免多实例共享）
+        self._snapshot_elements: Dict[str, Any] = {}
     
     async def connect(self) -> bool:
         """Connect to Chrome via CDP."""
@@ -117,14 +143,19 @@ class ChromeAdapter(BaseAdapter):
         options: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Execute a browser action."""
+        # 连接状态检查
+        if not self._connected or not self._page:
+            return {"success": False, "error": "未连接到 Chrome，请先调用 connect()"}
+        
         options = options or {}
-        timeout = options.get("timeout", 10000)
+        timeout = options.get("timeout", self.DEFAULT_TIMEOUT)
         
         try:
             if action == "goto":
                 url = value if isinstance(value, str) else target.get("url") if target else None
-                if url:
-                    await self._page.goto(url, timeout=timeout)
+                if not url:
+                    return {"success": False, "error": "goto 操作需要提供 url"}
+                await self._page.goto(url, timeout=timeout)
                 return {"success": True, "data": {"url": self._page.url}}
             
             elif action == "click":
@@ -162,10 +193,11 @@ class ChromeAdapter(BaseAdapter):
             
             elif action == "scroll":
                 direction = value or "down"
+                distance = self.DEFAULT_SCROLL_DISTANCE
                 if direction == "down":
-                    await self._page.evaluate("window.scrollBy(0, 500)")
+                    await self._page.evaluate(f"window.scrollBy(0, {distance})")
                 elif direction == "up":
-                    await self._page.evaluate("window.scrollBy(0, -500)")
+                    await self._page.evaluate(f"window.scrollBy(0, -{distance})")
                 return {"success": True}
             
             elif action == "back":
@@ -189,6 +221,74 @@ class ChromeAdapter(BaseAdapter):
                 await self._page.bring_to_front()
                 return {"success": True}
             
+            # ==================== 新增能力 ====================
+            
+            # A11y 树快照 - 核心能力，支持 uid 定位
+            elif action == "take_snapshot":
+                snapshot = await self._take_accessibility_snapshot()
+                return {"success": True, "snapshot": snapshot}
+            
+            # 多页面管理
+            elif action == "list_pages":
+                pages = await self._list_pages()
+                return {"success": True, "pages": pages}
+            
+            elif action == "select_page":
+                page_id = value if isinstance(value, int) else target.get("page_id") if target else 0
+                await self._select_page(page_id)
+                return {"success": True, "selected": page_id}
+            
+            elif action == "new_page":
+                url = value if isinstance(value, str) else target.get("url") if target else "about:blank"
+                page_info = await self._new_page(url)
+                return {"success": True, "page": page_info}
+            
+            elif action == "close_page":
+                page_id = value if isinstance(value, int) else target.get("page_id") if target else None
+                await self._close_page(page_id)
+                return {"success": True}
+            
+            # 更多交互操作
+            elif action == "hover":
+                selector = self._build_selector(target)
+                await self._page.hover(selector, timeout=timeout)
+                return {"success": True}
+            
+            elif action == "drag":
+                if not target:
+                    return {"success": False, "error": "drag 操作需要 target 参数"}
+                from_sel = target.get("from")
+                to_sel = target.get("to")
+                if not from_sel or not to_sel:
+                    return {"success": False, "error": "drag 操作需要 from 和 to 参数"}
+                await self._page.drag_and_drop(from_sel, to_sel, timeout=timeout)
+                return {"success": True}
+            
+            elif action == "press_key":
+                key = value if isinstance(value, str) else target.get("key") if target else None
+                if not key:
+                    return {"success": False, "error": "press_key 操作需要提供 key"}
+                await self._page.keyboard.press(key)
+                return {"success": True}
+            
+            elif action == "fill_form":
+                # 批量填写表单：value = [{"selector": "#id", "value": "text"}, ...]
+                form_data = value if isinstance(value, list) else []
+                for item in form_data:
+                    sel = item.get("selector")
+                    val = item.get("value", "")
+                    if sel:
+                        await self._page.fill(sel, val, timeout=timeout)
+                return {"success": True, "filled": len(form_data)}
+            
+            # 获取页面信息
+            elif action == "get_url":
+                return {"success": True, "url": self._page.url}
+            
+            elif action == "get_title":
+                title = await self._page.title()
+                return {"success": True, "title": title}
+            
             else:
                 return {"success": False, "error": f"Unknown action: {action}"}
                 
@@ -196,9 +296,25 @@ class ChromeAdapter(BaseAdapter):
             return {"success": False, "error": str(e)}
     
     def _build_selector(self, target: Optional[Dict[str, Any]]) -> str:
-        """Build a Playwright selector from target."""
+        """构建 Playwright 选择器，支持 uid/css/xpath/name/role 多种方式"""
         if not target:
             return "*"
+        
+        # 支持 uid 定位（通过 take_snapshot 获取的 uid）
+        if target.get("uid"):
+            uid = target["uid"]
+            element_info = self._snapshot_elements.get(uid)
+            if element_info:
+                role = element_info.get("role")
+                name = element_info.get("name")
+                # 通过 role + name 组合定位
+                if role and name:
+                    return f'role={role}[name="{name}"]'
+                elif name:
+                    return f'text="{name}"'
+                elif role:
+                    return f'role={role}'
+            raise ValueError(f"未知的 uid: {uid}，请先调用 take_snapshot 获取最新快照")
         
         if target.get("css"):
             return target["css"]
@@ -229,3 +345,138 @@ class ChromeAdapter(BaseAdapter):
             }
         """)
         return elements
+    
+    # ==================== 新增辅助方法 ====================
+    
+    async def _take_accessibility_snapshot(self) -> str:
+        """
+        获取 A11y 树快照，返回带 uid 的可访问性树。
+        类似 Chrome DevTools MCP 的 take_snapshot 能力。
+        """
+        # 获取 A11y 树
+        snapshot = await self._page.accessibility.snapshot()
+        
+        # 为每个元素分配 uid 并缓存
+        self._snapshot_elements = {}
+        uid_counter = [0]  # 用列表包装以便在闭包中修改
+        
+        def assign_uids(node: dict, prefix: str = "") -> dict:
+            """recursive assign uids to nodes"""
+            if not node:
+                return node
+            
+            uid = f"{prefix}{uid_counter[0]}"
+            uid_counter[0] += 1
+            node["uid"] = uid
+            
+            # 缓存元素信息用于后续定位
+            self._snapshot_elements[uid] = {
+                "role": node.get("role"),
+                "name": node.get("name"),
+                "value": node.get("value"),
+            }
+            
+            # 递归处理子节点
+            if "children" in node:
+                for child in node["children"]:
+                    assign_uids(child, prefix)
+            
+            return node
+        
+        if snapshot:
+            assign_uids(snapshot, "e_")
+        
+        # 格式化输出，类似 Chrome DevTools MCP 的格式
+        return self._format_snapshot(snapshot)
+    
+    def _format_snapshot(self, node: dict, indent: int = 0) -> str:
+        """格式化 A11y 树为文本表示"""
+        if not node:
+            return ""
+        
+        lines = []
+        prefix = "  " * indent
+        
+        # 构建节点描述
+        uid = node.get("uid", "")
+        role = node.get("role", "")
+        name = node.get("name", "")
+        value = node.get("value", "")
+        
+        desc_parts = [f"uid={uid}", role]
+        if name:
+            desc_parts.append(f'"{name}"')
+        if value:
+            desc_parts.append(f'value="{value}"')
+        
+        lines.append(f"{prefix}{' '.join(desc_parts)}")
+        
+        # 递归处理子节点
+        if "children" in node:
+            for child in node["children"]:
+                lines.append(self._format_snapshot(child, indent + 1))
+        
+        return "\n".join(filter(None, lines))
+    
+    async def _list_pages(self) -> List[Dict[str, Any]]:
+        """列出所有页面"""
+        pages = []
+        for ctx in self._browser.contexts:
+            for i, page in enumerate(ctx.pages):
+                pages.append({
+                    "id": len(pages),
+                    "url": page.url,
+                    "title": await page.title(),
+                    "selected": page == self._page
+                })
+        return pages
+    
+    async def _select_page(self, page_id: int) -> bool:
+        """选择指定页面，返回是否成功"""
+        all_pages = []
+        for ctx in self._browser.contexts:
+            all_pages.extend(ctx.pages)
+        
+        if not (0 <= page_id < len(all_pages)):
+            raise ValueError(f"page_id {page_id} 超出范围，当前共 {len(all_pages)} 个页面")
+        
+        self._page = all_pages[page_id]
+        await self._page.bring_to_front()
+        return True
+    
+    async def _new_page(self, url: str = "about:blank") -> Dict[str, Any]:
+        """新建页面"""
+        ctx = self._browser.contexts[0] if self._browser.contexts else await self._browser.new_context()
+        page = await ctx.new_page()
+        if url != "about:blank":
+            await page.goto(url)
+        self._page = page
+        
+        return {
+            "url": page.url,
+            "title": await page.title()
+        }
+    
+    async def _close_page(self, page_id: Optional[int] = None) -> None:
+        """关闭页面"""
+        all_pages = []
+        for ctx in self._browser.contexts:
+            all_pages.extend(ctx.pages)
+        
+        if page_id is not None and 0 <= page_id < len(all_pages):
+            target_page = all_pages[page_id]
+        else:
+            target_page = self._page
+        
+        # 不要关闭最后一个页面
+        if len(all_pages) > 1:
+            await target_page.close()
+            # 如果关闭的是当前页面，切换到第一个页面
+            if target_page == self._page:
+                remaining_pages = [p for p in all_pages if p != target_page]
+                if remaining_pages:
+                    self._page = remaining_pages[0]
+    
+    def get_element_by_uid(self, uid: str) -> Optional[Dict[str, Any]]:
+        """通过 uid 获取缓存的元素信息"""
+        return self._snapshot_elements.get(uid)
