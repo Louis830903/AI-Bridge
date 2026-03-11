@@ -84,9 +84,9 @@ AI → MCP Protocol → AI-Bridge → Native API
 
 <div align="center">
 
-| 🤖 **Universal AI** | 🌏 **13 IM Platforms** | 📊 **Office Suite** | 🖥️ **Any Desktop App** |
-|:---:|:---:|:---:|:---:|
-| Claude, GPT, Qwen, Gemini, OpenClaw, and any MCP-compatible AI | WhatsApp, Telegram, Slack, Teams, Discord, Feishu, DingTalk, WeCom, LINE, Viber, Messenger, KakaoTalk, Google Chat | Word, Excel, PowerPoint, WPS Office | Windows UIA, Chrome, Edge |
+| 🤖 **Universal AI** | 🌏 **13 IM Platforms** | 📊 **Office Suite** | 🖥️ **Any Desktop App** | 🤖 **Browser Automation** |
+|:---:|:---:|:---:|:---:|:---:|
+| Claude, GPT, Qwen, Gemini, OpenClaw, and any MCP-compatible AI | WhatsApp, Telegram, Slack, Teams, Discord, Feishu, DingTalk, WeCom, LINE, Viber, Messenger, KakaoTalk, Google Chat | Word, Excel, PowerPoint, WPS Office | Windows UIA, Chrome, Edge | Price Monitor, Auto Check-in, Data Scraping, Multi-platform Publish |
 
 </div>
 
@@ -117,6 +117,13 @@ AI → MCP Protocol → AI-Bridge → Native API
 │   └─ Edge                    ├─ Microsoft Excel        └─ via UI Automation │
 │                              ├─ Microsoft PowerPoint                        │
 │                              └─ WPS Office (CN)                             │
+│                                                                              │
+│   🤖 AUTOMATION TASKS                                                       │
+│   ├─ 📈 Monitor: Price Tracking │ Stock Alert │ News Aggregation           │
+│   ├─ ✅ Checkin: Daily Sign-in │ Flash Sale │ Booking                       │
+│   ├─ 📋 Office: Attendance │ Form Fill │ Data Extraction                   │
+│   ├─ 📤 Publish: Multi-platform │ Comment Management                        │
+│   └─ 📚 Learning: Paper Download │ Auto-play │ Auto-pagination             │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -161,6 +168,17 @@ AI → MCP Protocol → AI-Bridge → Native API
 │                     │      │                     │      │   [win32com]        │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
             │                             │                             │
+            └─────────────────────────────┼─────────────────────────────┘
+                                          ▼
+                         ┌────────────────────────────────┐
+                         │   🤖 AUTOMATION TASKS ENGINE   │
+                         │   ───────────────────────      │
+                         │   Monitor │ Checkin │ Office   │
+                         │   Publish │ Learning           │
+                         │   [Semantic Matching]          │
+                         └────────────────────────────────┘
+                                          │
+            ┌─────────────────────────────┼─────────────────────────────┐
             ▼                             ▼                             ▼
     ┌───────────┐                ┌───────────────┐              ┌───────────┐
     │  Webpages │                │  Chat/Channel │              │ Documents │
@@ -410,6 +428,160 @@ await bridge.execute("wecom", "send_to_chat", {
 
 <br/>
 
+## 🤖 Browser Automation Tasks | 浏览器自动化任务
+
+**NEW!** Semantic-based automation engine for various scenarios.
+
+**全新！** 基于语义匹配的自动化引擎，支持多种场景。
+
+<details>
+<summary><b>📈 Price & Stock Monitoring | 价格库存监控</b></summary>
+
+```python
+from aibridge.automation.tasks import MonitorTask
+
+task = MonitorTask()
+
+# Extract price from any e-commerce page | 从任意电商页面提取价格
+price = task.extract_price(page_snapshot)
+print(f"Current price: {price.currency} {price.value}")
+
+# Track price changes | 追踪价格变化
+result = task.track_price(snapshot, target_price=99.99, previous_price=129.99)
+if result.changed:
+    print(f"🔔 Price dropped! {result.message}")
+
+# Monitor stock status | 监控库存状态
+stock = task.detect_stock(snapshot)
+if stock.in_stock:
+    print("✅ Item is now IN STOCK!")
+```
+</details>
+
+<details>
+<summary><b>✅ Daily Check-in & Booking | 每日签到与预约</b></summary>
+
+```python
+from aibridge.automation.tasks import CheckinTask
+
+task = CheckinTask()
+
+# Find check-in button on any page | 在任意页面找到签到按钮
+result = task.find_checkin_button(snapshot)
+if result.button_uid and not result.already_checked:
+    # Click to check in | 点击签到
+    await browser.click(result.button_uid)
+
+# Find available booking slots | 查找可预约时间段
+slots = task.find_booking_slots(snapshot)
+available = [s for s in slots if s.available]
+print(f"Found {len(available)} available slots")
+
+# Flash sale preparation | 秒杀准备
+targets = task.prepare_rapid_click_targets(snapshot, ["抢购", "立即购买"])
+```
+</details>
+
+<details>
+<summary><b>📋 Web Office Automation | 网页办公自动化</b></summary>
+
+```python
+from aibridge.automation.tasks import OfficeTask
+
+task = OfficeTask()
+
+# Find clock-in button | 查找打卡按钮
+btn = task.find_clock_in_button(snapshot)
+await browser.click(btn.uid)
+
+# Extract form fields | 提取表单字段
+fields = task.extract_form_fields(snapshot)
+for field in fields:
+    print(f"Field: {field.name} ({field.field_type})")
+
+# Extract table data and export | 提取表格数据并导出
+table = task.extract_table_data(snapshot)
+print(table.to_csv())  # Export as CSV
+print(table.to_json()) # Export as JSON
+```
+</details>
+
+<details>
+<summary><b>📤 Multi-platform Publishing | 多平台内容分发</b></summary>
+
+```python
+from aibridge.automation.tasks import PublishTask, PUBLISH_PLATFORMS
+
+task = PublishTask()
+
+# Supported platforms | 支持的平台
+# Twitter, LinkedIn, Weibo, Zhihu, Dev.to, Medium
+
+# Find compose box | 查找发布输入框
+box = task.find_compose_box(snapshot)
+await browser.fill(box.uid, "Your content here...")
+
+# Adapt content for each platform | 适配各平台格式
+twitter_content = task.adapt_content_for_platform(content, "twitter")
+linkedin_content = task.adapt_content_for_platform(content, "linkedin")
+
+# Extract and manage comments | 提取和管理评论
+comments = task.extract_comments(snapshot, max_count=50)
+```
+</details>
+
+<details>
+<summary><b>📚 Learning & Research | 学习研究</b></summary>
+
+```python
+from aibridge.automation.tasks import LearningTask
+
+task = LearningTask()
+
+# Extract papers from search results | 从搜索结果提取论文
+papers = task.extract_papers(snapshot)
+for paper in papers:
+    print(f"{paper.title} ({paper.year}) - DOI: {paper.doi}")
+
+# Find video controls | 查找视频控制
+video = task.find_video_controls(snapshot)
+if video.play_uid:
+    await browser.click(video.play_uid)  # Auto-play
+if video.next_uid:
+    await browser.click(video.next_uid)  # Next video
+
+# Auto-pagination for reading | 自动翻页阅读
+progress = task.get_reading_progress(snapshot)
+print(f"Page {progress.current_page}/{progress.total_pages}")
+if progress.next_uid:
+    await browser.click(progress.next_uid)
+```
+</details>
+
+### YAML Configuration | YAML 配置驱动
+
+```yaml
+# tasks.yaml
+tasks:
+  - name: "V2EX Daily Check-in"
+    type: checkin
+    url: "https://www.v2ex.com/mission/daily"
+    schedule: "0 9 * * *"  # 9am daily
+    steps:
+      - action: click
+        target: "领取"
+
+  - name: "Monitor GPU Price"
+    type: monitor
+    url: "https://example.com/rtx4090"
+    schedule: "*/30 * * * *"  # Every 30 min
+    steps:
+      - action: extract
+        target: "price"
+```
+
+<br/>
+
 ## 📊 Office Automation | 办公自动化
 
 ```python
@@ -538,6 +710,8 @@ class MyAppAdapter(BaseAdapter):
 - [x] 🇨🇳 China IM (Feishu, DingTalk, WeCom)
 - [x] 📊 Office Suite (MS Office, WPS)
 - [x] 🖥️ Desktop Automation (Windows UIA)
+- [x] 🤖 **Browser Automation Tasks** (Monitor, Checkin, Office, Publish, Learning) ✨NEW
+- [x] 🧠 **Universal Nurture Engine** (15+ platforms semantic matching) ✨NEW
 - [ ] 🏪 Adapter Marketplace
 - [ ] 🎨 Visual Workflow Builder
 - [ ] 🏢 Enterprise Features

@@ -95,6 +95,66 @@ class ActionSemantics:
         "what's happening", "what do you think", "add a comment",
     })
     
+    # ========== 监控类语义 ==========
+    
+    # 价格相关
+    PRICE: Set[str] = field(default_factory=lambda: {
+        "price", "cost", "fee", "￥", "$", "€", "£",
+        "价格", "售价", "现价", "原价", "促销价", "特价", "到手价",
+        "元", "起",
+    })
+    
+    # 库存相关
+    STOCK: Set[str] = field(default_factory=lambda: {
+        "stock", "inventory", "available", "in stock", "out of stock", "sold out",
+        "库存", "有货", "无货", "缺货", "补货", "售罄", "已售罄",
+        "立即购买", "加入购物车", "预约", "到货通知",
+    })
+    
+    # 登录相关
+    LOGIN: Set[str] = field(default_factory=lambda: {
+        "login", "log in", "sign in", "signin", "authenticate",
+        "登录", "登入", "登陆", "用户登录",
+    })
+    
+    # 确认/提交相关
+    CONFIRM: Set[str] = field(default_factory=lambda: {
+        "confirm", "ok", "yes", "agree", "accept", "continue",
+        "确认", "确定", "同意", "接受", "继续", "下一步",
+    })
+    
+    # 预约/订制相关
+    BOOKING: Set[str] = field(default_factory=lambda: {
+        "book", "reserve", "appointment", "schedule",
+        "预约", "预定", "挂号", "置顶", "订制",
+    })
+    
+    # 播放相关
+    PLAY: Set[str] = field(default_factory=lambda: {
+        "play", "start", "resume", "watch",
+        "播放", "开始", "继续播放", "观看",
+        "▶", "▶️",
+    })
+    
+    # 下载相关
+    DOWNLOAD: Set[str] = field(default_factory=lambda: {
+        "download", "save", "export", "get",
+        "下载", "保存", "导出", "获取",
+    })
+    
+    # 翻页相关
+    NEXT_PAGE: Set[str] = field(default_factory=lambda: {
+        "next", "next page", "more", "continue", "load more",
+        "下一页", "下一章", "更多", "加载更多", "继续阅读",
+        "→", "›", "»",
+    })
+    
+    # 考勤打卡相关
+    CLOCK_IN: Set[str] = field(default_factory=lambda: {
+        "clock in", "punch in", "check in", "attendance",
+        "打卡", "上班打卡", "下班打卡", "考勤", "签到",
+    })
+    
     @classmethod
     def _get_instance(cls) -> 'ActionSemantics':
         """获取单例实例（避免重复初始化开销）"""
@@ -107,6 +167,7 @@ class ActionSemantics:
         """获取动作类型到关键词集合的映射（内部方法，消除重复代码）"""
         instance = cls._get_instance()
         return {
+            # 养号类
             "upvote": instance.UPVOTE,
             "downvote": instance.DOWNVOTE,
             "follow": instance.FOLLOW,
@@ -117,6 +178,16 @@ class ActionSemantics:
             "checkin": instance.CHECKIN,
             "coin": instance.COIN,
             "submit": instance.SUBMIT,
+            # 监控类
+            "price": instance.PRICE,
+            "stock": instance.STOCK,
+            "login": instance.LOGIN,
+            "confirm": instance.CONFIRM,
+            "booking": instance.BOOKING,
+            "play": instance.PLAY,
+            "download": instance.DOWNLOAD,
+            "next_page": instance.NEXT_PAGE,
+            "clock_in": instance.CLOCK_IN,
         }
     
     @classmethod
