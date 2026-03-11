@@ -23,6 +23,23 @@
 
 <br/>
 
+<!-- 🔥 WHAT'S NEW BANNER -->
+<table>
+<tr>
+<td>
+
+```diff
++ 🎉 NEW: Browser Automation Tasks Engine - Monitor • Checkin • Publish • Learning
++ 🧠 NEW: Universal Nurture Engine - 15+ Platforms Semantic Matching
++ 📈 Price Tracking • ✅ Auto Check-in • 📤 Multi-platform Publish • 📚 Auto-play Courses
+```
+
+</td>
+</tr>
+</table>
+
+<br/>
+
 **🚀 One Protocol. Any AI. Every App.**
 
 **🚀 一个协议，连接所有 AI，操控所有应用**
@@ -428,11 +445,31 @@ await bridge.execute("wecom", "send_to_chat", {
 
 <br/>
 
+---
+
+<div align="center">
+
 ## 🤖 Browser Automation Tasks | 浏览器自动化任务
 
-**NEW!** Semantic-based automation engine for various scenarios.
+```
+██████╗ ███████╗ ██████╗ ████████╗ ██████╗  ██████╗ 
+██╔══██╗██╔════╝██╔══██╗╚══██╔══╝██╔═══██╗██╔════╝ 
+██████╔╝█████╗  ██████╔╝   ██║   ██████╔╝ ██║  ███╗
+██╔══██╗██╔══╝  ██╔═══╝    ██║   ██╔══██╗██║   ██║
+██║  ██║███████╗██║        ██║   ██║  ██║╚██████╔╝
+╚═╝  ╚═╝╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ 
+    🧠 Semantic Matching • 15+ Platforms • YAML Config
+```
 
-**全新！** 基于语义匹配的自动化引擎，支持多种场景。
+<br/>
+
+| 📈 **Monitor** | ✅ **Checkin** | 📋 **Office** | 📤 **Publish** | 📚 **Learning** |
+|:---:|:---:|:---:|:---:|:---:|
+| Price Tracking | Daily Sign-in | Web Attendance | Multi-platform | Paper Download |
+| Stock Alert | Flash Sale | Form Filling | Comment Mgmt | Video Auto-play |
+| News Aggregation | Booking | Data Extraction | Content Adapt | Auto-pagination |
+
+</div>
 
 <details>
 <summary><b>📈 Price & Stock Monitoring | 价格库存监控</b></summary>
@@ -579,6 +616,27 @@ tasks:
       - action: extract
         target: "price"
 ```
+
+<div align="center">
+
+### 🔄 How It Works | 工作原理
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  🌐 Browser      │    │  🧠 Semantic     │    │  🎯 Smart       │
+│  Page Snapshot  │ →→ │  Matching Engine │ →→ │  Element Find  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+        │                        │                        │
+        ▼                        ▼                        ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  📄 A11y Tree   │    │  🌍 Multi-lang   │    │  ⚡ Auto       │
+│  Parse Elements │    │  "签到" = "check in" │    │  Click/Fill   │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+</div>
+
+---
 
 <br/>
 
