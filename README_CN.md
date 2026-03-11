@@ -23,6 +23,23 @@
 
 <br/>
 
+<!-- 🔥 新功能横幅 -->
+<table>
+<tr>
+<td>
+
+```diff
++ 🎉 新功能: 浏览器自动化任务引擎 - 监控 • 签到 • 分发 • 学习
++ 🧠 新功能: 通用养号引擎 - 15+平台语义匹配
++ 📈 价格追踪 • ✅ 自动签到 • 📤 多平台发布 • 📚 自动播放课程
+```
+
+</td>
+</tr>
+</table>
+
+<br/>
+
 **🚀 一个协议，连接所有 AI，操控所有应用**
 
 **🚀 One Protocol. Any AI. Every App.**
@@ -82,9 +99,9 @@ AI → MCP协议 → AI-Bridge → 原生API
 
 <div align="center">
 
-| 🤖 **全AI兼容** | 🌏 **13个即时通讯平台** | 📊 **办公套件** | 🖥️ **任意桌面应用** |
-|:---:|:---:|:---:|:---:|
-| Claude、GPT、千问、Gemini、OpenClaw 等所有 MCP 兼容的 AI | WhatsApp、Telegram、Slack、Teams、Discord、飞书、钉钉、企微、LINE、Viber、Messenger、KakaoTalk、Google Chat | Word、Excel、PowerPoint、WPS Office | Windows UIA、Chrome、Edge |
+| 🤖 **全AI兼容** | 🌏 **13个即时通讯平台** | 📊 **办公套件** | 🖥️ **任意桌面应用** | 🤖 **浏览器自动化** |
+|:---:|:---:|:---:|:---:|:---:|
+| Claude、GPT、千问、Gemini、OpenClaw 等所有 MCP 兼容的 AI | WhatsApp、Telegram、Slack、Teams、Discord、飞书、钉钉、企微、LINE、Viber、Messenger、KakaoTalk、Google Chat | Word、Excel、PowerPoint、WPS Office | Windows UIA、Chrome、Edge | 价格监控、自动签到、数据采集、多平台分发 |
 
 </div>
 
@@ -115,6 +132,13 @@ AI → MCP协议 → AI-Bridge → 原生API
 │   └─ Edge                ├─ Microsoft Excel      └─ 通过 UI Automation    │
 │                          ├─ Microsoft PowerPoint                          │
 │                          └─ WPS Office（国产）                             │
+│                                                                              │
+│   🤖 自动化任务引擎                                                         │
+│   ├─ 📈 监控类：价格追踪 │ 库存提醒 │ 新闻聚合                       │
+│   ├─ ✅ 签到类：每日签到 │ 抢票秒杀 │ 预约服务                       │
+│   ├─ 📋 办公类：网页打卡 │ 表单填写 │ 数据采集                       │
+│   ├─ 📤 分发类：多平台发布 │ 评论管理                               │
+│   └─ 📚 学习类：论文下载 │ 自动播放 │ 自动翻页                       │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -158,6 +182,22 @@ AI → MCP协议 → AI-Bridge → 原生API
 │   [Playwright]      │      │   [REST APIs]       │      │   PPT │ WPS        │
 │                     │      │                     │      │   [win32com]       │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
+            │                             │                             │
+            └─────────────────────────────┼─────────────────────────────┘
+                                          ▼
+                         ┌────────────────────────────────┐
+                         │   🤖 自动化任务引擎            │
+                         │   ───────────────────────      │
+                         │   监控 │ 签到 │ 办公           │
+                         │   分发 │ 学习                 │
+                         │   [语义匹配引擎]               │
+                         └────────────────────────────────┘
+                                          │
+            ┌─────────────────────────────┼─────────────────────────────┐
+            ▼                             ▼                             ▼
+    ┌───────────┐                ┌───────────────┐              ┌───────────┐
+    │  网页      │                │  聊天/频道    │              │   文档    │
+    └───────────┘                └───────────────┘              └───────────┘
 ```
 
 <br/>
@@ -400,6 +440,199 @@ await bridge.execute("discord", "send_embed", {
 
 <br/>
 
+---
+
+<div align="center">
+
+## 🤖 浏览器自动化任务
+
+```
+██████╗ ███████╗ ██████╗ ████████╗ ██████╗  ██████╗ 
+██╔══██╗██╔════╝██╔══██╗╚══██╔══╝██╔═══██╗██╔════╝ 
+██████╔╝█████╗  ██████╔╝   ██║   ██████╔╝ ██║  ███╗
+██╔══██╗██╔══╝  ██╔═══╝    ██║   ██╔══██╗██║   ██║
+██║  ██║███████╗██║        ██║   ██║  ██║╚██████╔╝
+╚═╝  ╚═╝╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ 
+       🧠 语义匹配 • 15+平台支持 • YAML配置驱动
+```
+
+<br/>
+
+| 📈 **监控** | ✅ **签到** | 📋 **办公** | 📤 **分发** | 📚 **学习** |
+|:---:|:---:|:---:|:---:|:---:|
+| 价格追踪 | 每日签到 | 网页打卡 | 多平台发布 | 论文下载 |
+| 库存提醒 | 秒杀抢购 | 表单填写 | 评论管理 | 视频自播 |
+| 新闻聚合 | 预约抢位 | 数据提取 | 内容适配 | 自动翻页 |
+
+</div>
+
+<details>
+<summary><b>📈 价格库存监控</b></summary>
+
+```python
+from aibridge.automation.tasks import MonitorTask
+
+task = MonitorTask()
+
+# 从任意电商页面提取价格
+price = task.extract_price(page_snapshot)
+print(f"当前价格: {price.currency} {price.value}")
+
+# 追踪价格变化
+result = task.track_price(snapshot, target_price=99.99, previous_price=129.99)
+if result.changed:
+    print(f"🔔 价格已下降！{result.message}")
+
+# 监控库存状态
+stock = task.detect_stock(snapshot)
+if stock.in_stock:
+    print("✅ 商品已到货！")
+```
+</details>
+
+<details>
+<summary><b>✅ 每日签到与预约</b></summary>
+
+```python
+from aibridge.automation.tasks import CheckinTask
+
+task = CheckinTask()
+
+# 在任意页面找到签到按钮
+result = task.find_checkin_button(snapshot)
+if result.button_uid and not result.already_checked:
+    await browser.click(result.button_uid)  # 点击签到
+
+# 查找可预约时间段
+slots = task.find_booking_slots(snapshot)
+available = [s for s in slots if s.available]
+print(f"找到 {len(available)} 个可用时间段")
+
+# 秒杀准备
+targets = task.prepare_rapid_click_targets(snapshot, ["抢购", "立即购买"])
+```
+</details>
+
+<details>
+<summary><b>📋 网页办公自动化</b></summary>
+
+```python
+from aibridge.automation.tasks import OfficeTask
+
+task = OfficeTask()
+
+# 查找打卡按钮
+btn = task.find_clock_in_button(snapshot)
+await browser.click(btn.uid)
+
+# 提取表单字段
+fields = task.extract_form_fields(snapshot)
+for field in fields:
+    print(f"字段: {field.name} ({field.field_type})")
+
+# 提取表格数据并导出
+table = task.extract_table_data(snapshot)
+print(table.to_csv())  # 导出 CSV
+print(table.to_json()) # 导出 JSON
+```
+</details>
+
+<details>
+<summary><b>📤 多平台内容分发</b></summary>
+
+```python
+from aibridge.automation.tasks import PublishTask, PUBLISH_PLATFORMS
+
+task = PublishTask()
+
+# 支持的平台: Twitter, LinkedIn, 微博, 知乎, Dev.to, Medium
+
+# 查找发布输入框
+box = task.find_compose_box(snapshot)
+await browser.fill(box.uid, "您的内容...")
+
+# 适配各平台格式
+twitter_content = task.adapt_content_for_platform(content, "twitter")
+weibo_content = task.adapt_content_for_platform(content, "weibo")
+
+# 提取和管理评论
+comments = task.extract_comments(snapshot, max_count=50)
+```
+</details>
+
+<details>
+<summary><b>📚 学习研究</b></summary>
+
+```python
+from aibridge.automation.tasks import LearningTask
+
+task = LearningTask()
+
+# 从搜索结果提取论文
+papers = task.extract_papers(snapshot)
+for paper in papers:
+    print(f"{paper.title} ({paper.year}) - DOI: {paper.doi}")
+
+# 查找视频控制
+video = task.find_video_controls(snapshot)
+if video.play_uid:
+    await browser.click(video.play_uid)  # 自动播放
+if video.next_uid:
+    await browser.click(video.next_uid)  # 下一个视频
+
+# 自动翻页阅读
+progress = task.get_reading_progress(snapshot)
+print(f"第 {progress.current_page}/{progress.total_pages} 页")
+if progress.next_uid:
+    await browser.click(progress.next_uid)
+```
+</details>
+
+### YAML 配置驱动
+
+```yaml
+# tasks.yaml
+tasks:
+  - name: "V2EX 每日签到"
+    type: checkin
+    url: "https://www.v2ex.com/mission/daily"
+    schedule: "0 9 * * *"  # 每天早上9点
+    steps:
+      - action: click
+        target: "领取"
+
+  - name: "显卡价格监控"
+    type: monitor
+    url: "https://example.com/rtx4090"
+    schedule: "*/30 * * * *"  # 每30分钟
+    steps:
+      - action: extract
+        target: "price"
+```
+
+<div align="center">
+
+### 🔄 工作原理
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  🌐 浏览器页面  │    │  🧠 语义匹配     │    │  🎯 智能定位    │
+│  页面快照捕获  │ →→ │  跨平台识别引擎 │ →→ │  精准元素查找  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+        │                        │                        │
+        ▼                        ▼                        ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  📄 A11y树解析  │    │  🌍 多语言理解    │    │  ⚡ 自动操作    │
+│  元素结构提取  │    │  "签到" = "check in" │    │  点击/填写执行  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+</div>
+
+---
+
+<br/>
+
 ## 📊 办公自动化
 
 ```python
@@ -528,6 +761,8 @@ class MyAppAdapter(BaseAdapter):
 - [x] 🇨🇳 国内 IM（飞书、钉钉、企微）
 - [x] 📊 办公套件（MS Office、WPS）
 - [x] 🖥️ 桌面自动化（Windows UIA）
+- [x] 🤖 **浏览器自动化任务**（监控、签到、办公、分发、学习）✨新功能
+- [x] 🧠 **通用养号引擎**（15+平台语义匹配）✨新功能
 - [ ] 🏪 适配器市场
 - [ ] 🎨 可视化流程编排
 - [ ] 🏢 企业版功能
