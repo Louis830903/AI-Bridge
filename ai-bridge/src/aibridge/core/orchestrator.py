@@ -235,6 +235,64 @@ class ReasoningEngine:
             "error": "No matching reasoning rule found"
         }
     
+    def _infer_url_from_goal(self, goal: str) -> str:
+        """
+        从目标推断URL
+        
+        支持多种方式:
+        1. 直接提取 http:// 或 https:// 链接
+        2. 根据关键词推断 (百度 -> baidu.com, 京东 -> jd.com 等)
+        3. 默认返回百度
+        """
+        import re
+        
+        # 1. 直接提取完整URL
+        url_match = re.search(r'(https?://[^\s]+)', goal)
+        if url_match:
+            return url_match.group(1)
+        
+        # 2. 从目标中提取域名
+        domain_match = re.search(r'(?:www\.)?([\w-]+\.(?:com|cn|org|net|io))', goal)
+        if domain_match:
+            return f"https://{domain_match.group(1)}"
+        
+        # 3. 根据关键词推断常用网站
+        goal_lower = goal.lower()
+        url_mapping = {
+            # 中文关键词
+            "百度": "https://www.baidu.com",
+            "baidu": "https://www.baidu.com",
+            "京东": "https://www.jd.com",
+            "jd": "https://www.jd.com",
+            "淘宝": "https://www.taobao.com",
+            "taobao": "https://www.taobao.com",
+            "天猫": "https://www.tmall.com",
+            "tmall": "https://www.tmall.com",
+            "知乎": "https://www.zhihu.com",
+            "zhihu": "https://www.zhihu.com",
+            "微博": "https://weibo.com",
+            "weibo": "https://weibo.com",
+            "GitHub": "https://github.com",
+            "github": "https://github.com",
+            "谷歌": "https://www.google.com",
+            "google": "https://www.google.com",
+            "必应": "https://www.bing.com",
+            "bing": "https://www.bing.com",
+            "搜狗": "https://www.sogou.com",
+            "sogou": "https://www.sogou.com",
+            "B站": "https://www.bilibili.com",
+            "bilibili": "https://www.bilibili.com",
+            "抖音": "https://www.douyin.com",
+            "douyin": "https://www.douyin.com",
+        }
+        
+        for keyword, url in url_mapping.items():
+            if keyword in goal or keyword in goal_lower:
+                return url
+        
+        # 4. 默认返回百度
+        return "https://www.baidu.com"
+    
     def _check_completion(
         self,
         goal: str,
@@ -286,24 +344,15 @@ class ReasoningEngine:
         
         # 规则1: 如果是空白页或about:blank，先导航
         if not url or url in ["about:blank", ""]:
-            # 从目标中提取URL
-            import re
-            url_match = re.search(r'(https?://[^\s]+)', goal)
-            if url_match:
-                return {
-                    "reasoning": "当前是空白页，需要先导航到目标网站",
-                    "action": "goto",
-                    "action_params": {"url": url_match.group(1)},
-                    "is_complete": False
-                }
-            else:
-                # 默认导航到百度
-                return {
-                    "reasoning": "当前是空白页，默认导航到百度",
-                    "action": "goto",
-                    "action_params": {"url": "https://www.baidu.com"},
-                    "is_complete": False
-                }
+            # 从目标中提取URL或推断URL
+            target_url = self._infer_url_from_goal(goal)
+            
+            return {
+                "reasoning": f"当前是空白页，需要导航到 {target_url}",
+                "action": "goto",
+                "action_params": {"url": target_url},
+                "is_complete": False
+            }
         
         # 规则2: 如果目标是搜索，且还没有输入搜索词
         if ("搜索" in goal or "search" in goal.lower()) and "type" not in history_actions:
