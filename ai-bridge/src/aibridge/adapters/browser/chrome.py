@@ -56,7 +56,7 @@ class ChromeAdapter(BaseAdapter):
         id="chrome",
         name="Google Chrome",
         type=AdapterType.BROWSER,
-        version="2.3.2",  # 修复_format_snapshot递归问题
+        version="2.4.0",  # 添加extract action数据提取功能
         platforms=["windows", "macos", "linux"],
         actions=[
             # 原有能力
@@ -409,6 +409,10 @@ class ChromeAdapter(BaseAdapter):
                 page_id = value if isinstance(value, int) else target.get("page_id") if target else None
                 await self._close_page(page_id)
                 return {"success": True}
+            
+            # 数据提取 - 新增 extract action
+            elif action == "extract":
+                return await self._extract_data(target, value, options, timeout)
             
             # 更多交互操作
             elif action == "hover":
@@ -944,3 +948,90 @@ class ChromeAdapter(BaseAdapter):
         
         logger.warning(f"所有定位策略都失败: {target}, 最后错误: {last_error}")
         return None
+    
+    async def _extract_data(self, target, value, options, timeout):
+        """
+        从页面提取结构化数据
+        
+        Args:
+            target: 提取目标区域的选择器
+            value: 提取规则/schema
+            options: 选项
+            timeout: 超时
+        
+        Returns:
+            Dict: 包含结构化数据的统一返回格式
+        """
+        try:
+            # 获取提取配置
+            selector = target.get("css") if target else None
+            schema = value if isinstance(value, dict) else {}
+            multiple = options.get("multiple", False)  # 是否提取多个
+            
+            if not selector:
+                return {"success": False, "error": "extract 需要提供 css selector"}
+            
+            # 等待元素出现
+            await self._page.wait_for_selector(selector, state="attached", timeout=timeout)
+            
+            # 构建提取脚本
+            if schema:
+                # 根据 schema 提取指定字段
+                fields = list(schema.keys())
+                js_code = f"""
+                    () => {{
+                        const elements = document.querySelectorAll('{selector}');
+                        const results = [];
+                        elements.forEach((el, idx) => {{
+                            const item = {{}};
+                            {self._build_extraction_js(fields)}
+                            results.push(item);
+                        }});
+                        return {'results' if multiple else 'results[0] || {}'};
+                    }}
+                """
+                data = await self._page.evaluate(js_code)
+            else:
+                # 默认提取文本和属性
+                js_code = f"""
+                    () => {{
+                        const elements = document.querySelectorAll('{selector}');
+                        const results = Array.from(elements).map(el => ({{
+                            text: el.innerText?.trim() || '',
+                            html: el.innerHTML?.slice(0, 500) || '',
+                            href: el.href || el.getAttribute('href') || '',
+                            src: el.src || el.getAttribute('src') || ''
+                        }}));
+                        return {'results' if multiple else 'results[0] || {}'};
+                    }}
+                """
+                data = await self._page.evaluate(js_code)
+            
+            # 构建统一返回格式
+            return {
+                "success": True,
+                "action": "extract",
+                "data": data,
+                "summary": f"从页面提取了 {len(data) if isinstance(data, list) else 1} 条数据",
+                "metadata": {
+                    "selector": selector,
+                    "schema": schema,
+                    "multiple": multiple
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"数据提取失败: {e}")
+            return {
+                "success": False,
+                "action": "extract",
+                "error": str(e),
+                "data": None
+            }
+    
+    def _build_extraction_js(self, fields):
+        """根据字段列表构建 JS 提取代码"""
+        code_lines = []
+        for field in fields:
+            code_lines.append(f"item['{field}'] = el.querySelector('[data-field={field}]')?.innerText || el.getAttribute('{field}') || '';")
+        return "\n                            ".join(code_lines)
