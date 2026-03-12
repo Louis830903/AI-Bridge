@@ -309,6 +309,27 @@ class ReasoningEngine:
                     "reason": f"已成功提取数据: {step.result_data}"
                 }
         
+        # 规则2: 如果目标只是"打开/访问 XXX"，且已经成功导航到目标网站
+        if ("打开" in goal or "访问" in goal or "goto" in goal.lower()) and history:
+            last_goto = None
+            for step in history:
+                if step.action == "goto" and step.success:
+                    last_goto = step
+            
+            if last_goto:
+                # 检查当前URL是否匹配目标
+                current_url = observation.get("url", "")
+                expected_url = self._infer_url_from_goal(goal)
+                
+                # 如果URL匹配或在同一个域名下，认为任务完成
+                if expected_url in current_url or (
+                    last_goto.action_params.get("url") in current_url
+                ):
+                    return {
+                        "is_complete": True,
+                        "reason": f"已成功打开目标网站: {current_url}"
+                    }
+        
         # 如果目标包含"搜索"且已经导航并输入了搜索词
         if "搜索" in goal or "search" in goal.lower():
             has_navigated = any(s.action == "goto" for s in history)
@@ -342,13 +363,19 @@ class ReasoningEngine:
         elements = observation.get("elements", [])
         history_actions = [s.action for s in history]
         
-        # 规则1: 如果是空白页或about:blank，先导航
-        if not url or url in ["about:blank", ""]:
-            # 从目标中提取URL或推断URL
-            target_url = self._infer_url_from_goal(goal)
-            
+        # 规则1: 如果是空白页或about:blank，或者当前页面与目标不匹配，需要导航
+        target_url = self._infer_url_from_goal(goal)
+        
+        # 检查是否需要导航：空白页 或 URL不匹配
+        need_navigation = (
+            not url or 
+            url in ["about:blank", ""] or
+            (target_url not in url and url not in target_url)
+        )
+        
+        if need_navigation and "goto" not in history_actions:
             return {
-                "reasoning": f"当前是空白页，需要导航到 {target_url}",
+                "reasoning": f"需要导航到目标网站: {target_url}",
                 "action": "goto",
                 "action_params": {"url": target_url},
                 "is_complete": False
@@ -465,8 +492,20 @@ class ActionExecutor:
             elif action == "unknown":
                 return {"success": False, "error": "Unknown action"}
             
-            elif action in ["goto", "click", "type", "extract", "scroll", "wait", "screenshot"]:
-                # 标准操作
+            elif action == "goto":
+                # goto 操作特殊处理 - 支持 url 参数
+                url = params.get("url") or params.get("target", {}).get("url")
+                if not url:
+                    return {"success": False, "error": "goto 操作需要提供 url"}
+                result = await self.adapter.execute(
+                    "goto",
+                    target={"url": url},
+                    options=params.get("options", {})
+                )
+                return result
+            
+            elif action in ["click", "type", "extract", "scroll", "wait", "screenshot"]:
+                # 其他标准操作
                 result = await self.adapter.execute(
                     action,
                     target=params.get("target") or ({"css": params["selector"]} if "selector" in params else None),
