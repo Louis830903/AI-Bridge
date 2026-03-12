@@ -1,21 +1,16 @@
-"""AI-Bridge core module."""
+"""
+AI-Bridge Core - 意图识别和 O-R-A 循环
+"""
 
-from aibridge.core.protocol import Action, Target, Request, Response, RequestOptions
-from aibridge.core.server import AIBridgeServer
-from aibridge.core.manager import AdapterManager
-from aibridge.core.config import Config, load_config
-from aibridge.core.logger import get_logger, setup_logging
+from .intent_engine import IntentEngine, IntentType, IntentResult, ActionStep
+from .orchestrator import Orchestrator, TaskResult, TaskStatus
 
 __all__ = [
-    "Action",
-    "Target",
-    "Request",
-    "Response",
-    "RequestOptions",
-    "AIBridgeServer",
-    "AdapterManager",
-    "Config",
-    "load_config",
-    "get_logger",
-    "setup_logging",
+    "IntentEngine",
+    "IntentType", 
+    "IntentResult",
+    "ActionStep",
+    "Orchestrator",
+    "TaskResult",
+    "TaskStatus"
 ]
