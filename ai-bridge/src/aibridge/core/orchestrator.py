@@ -179,9 +179,17 @@ class ReasoningEngine:
     2. LLM推理 - 使用大语言模型（可选）
     """
     
-    def __init__(self, adapter: ChromeAdapter, use_llm: bool = False):
+    def __init__(self, adapter: ChromeAdapter, llm_provider=None):
+        """
+        初始化推理引擎
+
+        Args:
+            adapter: ChromeAdapter 实例
+            llm_provider: 共享的LLM提供者（可选）
+        """
         self.adapter = adapter
-        self.use_llm = use_llm
+        self.llm_provider = llm_provider
+        self.use_llm = llm_provider is not None
     
     async def reason(
         self,
@@ -453,14 +461,88 @@ class ReasoningEngine:
         history: List[StepRecord],
         remaining_steps: int
     ) -> Dict[str, Any]:
-        """使用LLM进行推理（高级功能）"""
-        # TODO: 实现LLM推理
-        return {
-            "reasoning": "LLM推理未实现，使用默认行为",
-            "action": "unknown",
-            "action_params": {},
-            "is_complete": False
-        }
+        """
+        使用LLM进行推理
+
+        通过共享的LLM提供者进行智能推理。
+        """
+        if not self.llm_provider:
+            return {
+                "reasoning": "LLM provider not configured",
+                "action": "unknown",
+                "action_params": {},
+                "is_complete": False
+            }
+
+        try:
+            # 构建提示词
+            history_summary = []
+            for step in history[-5:]:  # 最近5步
+                history_summary.append(f"- Step {step.step_number}: {step.action} - {'success' if step.success else 'failed'}")
+
+            prompt = f"""作为浏览器自动化助手，根据当前状态决定下一步行动。
+
+目标: {goal}
+
+当前页面:
+- URL: {observation.get('url', 'unknown')}
+- Title: {observation.get('title', 'unknown')}
+- 可交互元素: {observation.get('element_count', 0)} 个
+
+最近执行历史:
+{chr(10).join(history_summary) if history_summary else '无'}
+
+剩余步数: {remaining_steps}
+
+可用操作: goto, click, type, extract, scroll, wait
+
+请分析并返回JSON格式:
+{{
+    "reasoning": "为什么执行这个行动",
+    "action": "操作名",
+    "action_params": {{
+        "selector": "CSS选择器或目标",
+        "value": "值(如果需要)"
+    }},
+    "is_complete": true/false
+}}
+
+只返回JSON，不要其他解释。"""
+
+            # 调用共享LLM
+            response = await self.llm_provider.complete(
+                prompt=prompt,
+                temperature=0.3,
+                max_tokens=400
+            )
+
+            # 解析JSON
+            import json
+            try:
+                data = json.loads(response)
+                return {
+                    "reasoning": data.get("reasoning", "LLM推理"),
+                    "action": data.get("action", "unknown"),
+                    "action_params": data.get("action_params", {}),
+                    "is_complete": data.get("is_complete", False)
+                }
+            except json.JSONDecodeError:
+                logger.error(f"LLM响应JSON解析失败: {response[:200]}")
+                return {
+                    "reasoning": "LLM响应格式错误",
+                    "action": "unknown",
+                    "action_params": {},
+                    "is_complete": False
+                }
+
+        except Exception as e:
+            logger.error(f"LLM推理失败: {e}")
+            return {
+                "reasoning": f"LLM调用失败: {e}",
+                "action": "unknown",
+                "action_params": {},
+                "is_complete": False
+            }
 
 
 class ActionExecutor:

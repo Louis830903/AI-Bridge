@@ -266,22 +266,19 @@ class IntentEngine:
         ),
     ]
     
-    def __init__(self, adapter: ChromeAdapter):
+    def __init__(self, adapter: ChromeAdapter, llm_provider=None):
         self.adapter = adapter
-        self.use_llm = False  # 默认不使用LLM
-        self.llm_client = None
+        self.llm_provider = llm_provider
+        self.use_llm = llm_provider is not None
     
     async def initialize(self):
         """初始化意图引擎"""
         logger.info("Initializing Intent Engine...")
         
-        # 尝试加载LLM（可选）
-        try:
-            # 这里可以集成 OpenAI、Claude 等
-            # self.llm_client = OpenAI()
-            # self.use_llm = True
-            pass
-        except ImportError:
+        if self.llm_provider:
+            logger.info("LLM provider configured")
+            self.use_llm = True
+        else:
             logger.info("LLM not available, using rule-based mode only")
         
         logger.info("Intent Engine initialized")
@@ -331,23 +328,98 @@ class IntentEngine:
         )
     
     async def _parse_with_llm(self, intent_text: str) -> IntentResult:
-        """使用LLM解析意图"""
-        # TODO: 实现LLM解析
-        # prompt = f"""
-        # 将以下意图转换为浏览器操作序列（JSON格式）：
-        # 意图: {intent_text}
-        # 
-        # 可用操作: goto, click, type, extract, scroll
-        # 输出格式: {{"steps": [{{"action": "...", "target": {{...}}, "value": "..."}}]}}
-        # """
+        """
+        使用LLM解析意图
         
-        return IntentResult(
-            success=False,
-            intent_type=IntentType.UNKNOWN,
-            original_intent=intent_text,
-            steps=[],
-            error="LLM parsing not implemented yet"
-        )
+        通过共享的LLM提供者理解复杂意图。
+        """
+        if not self.llm_provider:
+            return IntentResult(
+                success=False,
+                intent_type=IntentType.UNKNOWN,
+                original_intent=intent_text,
+                steps=[],
+                error="LLM provider not configured"
+            )
+        
+        try:
+            # 构建提示词
+            prompt = f"""将以下用户意图转换为浏览器操作序列。
+
+用户意图: {intent_text}
+
+可用操作:
+- goto: 导航到指定URL
+- click: 点击元素
+- type: 输入文本
+- extract: 提取数据
+- scroll: 滚动页面
+
+请分析用户意图，返回JSON格式:
+{{
+    "intent_type": "navigate|search|click|type|extract|composite",
+    "steps": [
+        {{
+            "action": "操作名",
+            "target": {{"css": "选择器"}},
+            "value": "值(可选)",
+            "description": "操作描述"
+        }}
+    ],
+    "summary": "执行摘要"
+}}
+
+只返回JSON，不要其他解释。"""
+            
+            # 调用共享的LLM
+            response = await self.llm_provider.complete(
+                prompt=prompt,
+                temperature=0.2,
+                max_tokens=500
+            )
+            
+            # 解析JSON响应
+            import json
+            try:
+                data = json.loads(response)
+                steps_data = data.get("steps", [])
+                
+                steps = []
+                for step_data in steps_data:
+                    steps.append(ActionStep(
+                        action=step_data.get("action", ""),
+                        target=step_data.get("target"),
+                        value=step_data.get("value"),
+                        description=step_data.get("description", "")
+                    ))
+                
+                return IntentResult(
+                    success=True,
+                    intent_type=IntentType.COMPOSITE,
+                    original_intent=intent_text,
+                    steps=steps,
+                    summary=data.get("summary", f"LLM解析: {intent_text}")
+                )
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"LLM响应JSON解析失败: {e}")
+                return IntentResult(
+                    success=False,
+                    intent_type=IntentType.UNKNOWN,
+                    original_intent=intent_text,
+                    steps=[],
+                    error=f"LLM响应格式错误: {e}"
+                )
+                
+        except Exception as e:
+            logger.error(f"LLM调用失败: {e}")
+            return IntentResult(
+                success=False,
+                intent_type=IntentType.UNKNOWN,
+                original_intent=intent_text,
+                steps=[],
+                error=f"LLM调用失败: {e}"
+            )
     
     async def execute(self, intent_text: str, context: Optional[Dict] = None) -> Dict:
         """

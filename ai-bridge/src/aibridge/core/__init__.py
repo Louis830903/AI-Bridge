@@ -26,6 +26,15 @@ from .security import (
     PermissionLevel
 )
 
+# LLM 共享接口
+from .llm_provider import (
+    LLMProvider,
+    OpenAILLMProvider,
+    AgentSharedLLM,
+    NoOpLLMProvider,
+    create_llm_provider
+)
+
 __all__ = [
     # 意图和编排
     "IntentEngine",
@@ -55,5 +64,11 @@ __all__ = [
     "SecurityManager",
     "SecurityPolicy",
     "SecureAdapterWrapper",
-    "PermissionLevel"
+    "PermissionLevel",
+    # LLM 共享
+    "LLMProvider",
+    "OpenAILLMProvider",
+    "AgentSharedLLM",
+    "NoOpLLMProvider",
+    "create_llm_provider"
 ]
