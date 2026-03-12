@@ -32,6 +32,7 @@ Step 4: 观察 → 搜索结果页面
 Step 5: 任务完成，返回结果
 """
 
+import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional, Callable

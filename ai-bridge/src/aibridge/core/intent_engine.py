@@ -229,7 +229,7 @@ class IntentEngine:
         IntentPattern(
             IntentType.CLICK,
             [
-                r"^(?:点击|点|click)\s*(?:按钮|链接|元素)?\s*(?:叫|为)?["']?(.+?)["']?$",
+                r"^(?:点击|点|click)\s*(?:按钮|链接|元素)?\s*(?:叫|为)?[\"']?(.+?)[\"']?$",
                 r"^(?:点|click)\s+(.+)$",
             ],
             handle_click
@@ -239,8 +239,8 @@ class IntentEngine:
         IntentPattern(
             IntentType.TYPE,
             [
-                r"^(?:在|in)\s*(.+?)\s*(?:输入|填写|type|enter)\s*["']?(.+?)["']?$",
-                r"^(?:输入|填写)\s*["']?(.+?)["']?\s*(?:到|in)\s*(.+)$",
+                r"^(?:在|in)\s*(.+?)\s*(?:输入|填写|type|enter)\s*[\"']?(.+?)[\"']?$",
+                r"^(?:输入|填写)\s*[\"']?(.+?)[\"']?\s*(?:到|in)\s*(.+)$",
             ],
             handle_type
         ),
