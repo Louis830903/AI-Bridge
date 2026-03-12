@@ -1,6 +1,10 @@
-"""Chrome Adapter - Browser automation via Chrome DevTools Protocol
+"""Chrome Adapter - Browser automation via Playwright
 
-升级版：实现与 Chrome DevTools MCP 同等能力
+支持两种启动模式：
+- launch（默认）: 自动启动浏览器，开箱即用
+- connect: 连接已有浏览器（CDP模式）
+
+核心能力：
 - A11y 树快照 + uid 定位
 - 多页面管理
 - 完整的交互操作（hover/drag/press_key）
@@ -9,8 +13,11 @@
 
 import base64
 import json
-from typing import Any, Dict, List, Optional, Union
+import logging
+from typing import Any, Dict, List, Optional
 from aibridge.adapters.base import BaseAdapter, AdapterInfo, AdapterType
+
+logger = logging.getLogger(__name__)
 
 # Lazy import to avoid dependency issues
 playwright = None
@@ -49,7 +56,7 @@ class ChromeAdapter(BaseAdapter):
         id="chrome",
         name="Google Chrome",
         type=AdapterType.BROWSER,
-        version="2.1.0",  # 升级版本：支持自动启动
+        version="2.1.1",  # 修复资源泄漏、空指针等问题
         platforms=["windows", "macos", "linux"],
         actions=[
             # 原有能力
@@ -73,6 +80,8 @@ class ChromeAdapter(BaseAdapter):
     MAX_INTERACTIVE_ELEMENTS = 50
     MAX_TEXT_LENGTH = 100
     DEFAULT_TIMEOUT = 10000
+    DEFAULT_BLANK_URL = "about:blank"  # 默认空白页地址
+    UID_PREFIX = "e_"  # A11y 快照 uid 前缀
     
     # 启动模式
     MODE_LAUNCH = "launch"    # 自动启动浏览器（默认）
@@ -141,26 +150,43 @@ class ChromeAdapter(BaseAdapter):
             raise ConnectionError(f"Failed to connect/launch Chrome: {e}")
     
     async def disconnect(self) -> bool:
-        """Disconnect from Chrome."""
+        """断开与 Chrome 的连接，清理所有资源"""
         try:
-            if self._context and self.user_data_dir:
-                # persistent context 需要单独关闭
-                await self._context.close()
-            elif self._browser:
-                await self._browser.close()
+            # 先关闭 context（无论哪种模式都需要）
+            if self._context:
+                try:
+                    await self._context.close()
+                except Exception as e:
+                    logger.debug(f"关闭 context 时出错（可能已关闭）: {e}")
+            
+            # 再关闭 browser（非 persistent context 模式）
+            if self._browser:
+                try:
+                    await self._browser.close()
+                except Exception as e:
+                    logger.debug(f"关闭 browser 时出错: {e}")
+            
+            # 最后停止 playwright
             if self._playwright:
                 await self._playwright.stop()
+            
+            # 清理引用
+            self._context = None
+            self._browser = None
+            self._page = None
+            self._playwright = None
+            self._snapshot_elements = {}
             self._connected = False
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"disconnect 过程中发生错误: {e}")
             self._connected = False
             return False
     
     async def is_available(self) -> bool:
-        """Check if Chrome is available."""
+        """检查 Chrome/Playwright 是否可用"""
         pw = None
         browser = None
-        context = None
         try:
             async_playwright = get_playwright()
             pw = await async_playwright().start()
@@ -168,21 +194,15 @@ class ChromeAdapter(BaseAdapter):
             if self.mode == self.MODE_CONNECT:
                 # CDP 模式：检查是否能连接
                 browser = await pw.chromium.connect_over_cdp(self.cdp_url)
-                await browser.close()
             else:
                 # Launch 模式：检查是否能启动
                 browser = await pw.chromium.launch(headless=True)
-                await browser.close()
             
+            await browser.close()
             await pw.stop()
             return True
         except Exception:
             # 清理资源
-            if context:
-                try:
-                    await context.close()
-                except Exception:
-                    pass
             if browser:
                 try:
                     await browser.close()
@@ -299,7 +319,7 @@ class ChromeAdapter(BaseAdapter):
                 return {"success": True, "selected": page_id}
             
             elif action == "new_page":
-                url = value if isinstance(value, str) else target.get("url") if target else "about:blank"
+                url = value if isinstance(value, str) else target.get("url") if target else self.DEFAULT_BLANK_URL
                 page_info = await self._new_page(url)
                 return {"success": True, "page": page_info}
             
@@ -334,12 +354,17 @@ class ChromeAdapter(BaseAdapter):
             elif action == "fill_form":
                 # 批量填写表单：value = [{"selector": "#id", "value": "text"}, ...]
                 form_data = value if isinstance(value, list) else []
+                filled_count = 0
                 for item in form_data:
+                    # 类型校验：跳过非字典元素
+                    if not isinstance(item, dict):
+                        continue
                     sel = item.get("selector")
                     val = item.get("value", "")
-                    if sel:
+                    if sel and isinstance(val, str):
                         await self._page.fill(sel, val, timeout=timeout)
-                return {"success": True, "filled": len(form_data)}
+                        filled_count += 1
+                return {"success": True, "filled": filled_count}
             
             # 获取页面信息
             elif action == "get_url":
@@ -381,7 +406,9 @@ class ChromeAdapter(BaseAdapter):
         if target.get("xpath"):
             return f"xpath={target['xpath']}"
         if target.get("name"):
-            return f"text={target['name']}"
+            # 转义引号，防止注入
+            name = target['name'].replace('"', '\\"')
+            return f'text="{name}"'
         if target.get("role"):
             return f"role={target['role']}"
         
@@ -412,16 +439,22 @@ class ChromeAdapter(BaseAdapter):
         """
         获取 A11y 树快照，返回带 uid 的可访问性树。
         类似 Chrome DevTools MCP 的 take_snapshot 能力。
+        
+        Returns:
+            str: 格式化的 A11y 树文本表示，如果快照为空则返回空字符串
         """
         # 获取 A11y 树
         snapshot = await self._page.accessibility.snapshot()
+        
+        if not snapshot:
+            return ""
         
         # 为每个元素分配 uid 并缓存
         self._snapshot_elements = {}
         uid_counter = [0]  # 用列表包装以便在闭包中修改
         
         def assign_uids(node: dict, prefix: str = "") -> dict:
-            """recursive assign uids to nodes"""
+            """递归为节点分配 uid"""
             if not node:
                 return node
             
@@ -443,10 +476,9 @@ class ChromeAdapter(BaseAdapter):
             
             return node
         
-        if snapshot:
-            assign_uids(snapshot, "e_")
+        assign_uids(snapshot, self.UID_PREFIX)
         
-        # 格式化输出，类似 Chrome DevTools MCP 的格式
+        # 格式化输出
         return self._format_snapshot(snapshot)
     
     def _format_snapshot(self, node: dict, indent: int = 0) -> str:
@@ -515,17 +547,24 @@ class ChromeAdapter(BaseAdapter):
         await self._page.bring_to_front()
         return True
     
-    async def _new_page(self, url: str = "about:blank") -> Dict[str, Any]:
+    async def _new_page(self, url: str = "") -> Dict[str, Any]:
         """新建页面"""
+        if not url:
+            url = self.DEFAULT_BLANK_URL
+        
+        # 获取 context
+        ctx = None
         if self._context:
             ctx = self._context
         elif self._browser and self._browser.contexts:
             ctx = self._browser.contexts[0]
-        else:
+        elif self._browser:
             ctx = await self._browser.new_context()
+        else:
+            raise RuntimeError("浏览器未连接，请先调用 connect()")
         
         page = await ctx.new_page()
-        if url != "about:blank":
+        if url != self.DEFAULT_BLANK_URL:
             await page.goto(url)
         self._page = page
         
@@ -535,7 +574,14 @@ class ChromeAdapter(BaseAdapter):
         }
     
     async def _close_page(self, page_id: Optional[int] = None) -> None:
-        """关闭页面"""
+        """关闭页面
+        
+        Args:
+            page_id: 要关闭的页面ID，None 表示关闭当前页面
+            
+        Raises:
+            ValueError: page_id 超出有效范围
+        """
         all_pages = []
         if self._browser:
             for ctx in self._browser.contexts:
@@ -543,19 +589,25 @@ class ChromeAdapter(BaseAdapter):
         elif self._context:
             all_pages = list(self._context.pages)
         
-        if page_id is not None and 0 <= page_id < len(all_pages):
+        # 确定要关闭的页面
+        if page_id is not None:
+            if not (0 <= page_id < len(all_pages)):
+                raise ValueError(f"page_id {page_id} 超出范围，有效范围: 0-{len(all_pages) - 1}")
             target_page = all_pages[page_id]
         else:
             target_page = self._page
         
         # 不要关闭最后一个页面
-        if len(all_pages) > 1:
-            await target_page.close()
-            # 如果关闭的是当前页面，切换到第一个页面
-            if target_page == self._page:
-                remaining_pages = [p for p in all_pages if p != target_page]
-                if remaining_pages:
-                    self._page = remaining_pages[0]
+        if len(all_pages) <= 1:
+            logger.warning("无法关闭最后一个页面")
+            return
+        
+        await target_page.close()
+        # 如果关闭的是当前页面，切换到第一个页面
+        if target_page == self._page:
+            remaining_pages = [p for p in all_pages if p != target_page]
+            if remaining_pages:
+                self._page = remaining_pages[0]
     
     def get_element_by_uid(self, uid: str) -> Optional[Dict[str, Any]]:
         """通过 uid 获取缓存的元素信息"""
