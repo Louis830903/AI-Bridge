@@ -56,7 +56,7 @@ class ChromeAdapter(BaseAdapter):
         id="chrome",
         name="Google Chrome",
         type=AdapterType.BROWSER,
-        version="2.2.0",  # 修复元素交互、A11y快照、JS执行、截图保存
+        version="2.2.1",  # 代码审查全量修复
         platforms=["windows", "macos", "linux"],
         actions=[
             # 原有能力
@@ -256,8 +256,8 @@ class ChromeAdapter(BaseAdapter):
             
             elif action == "read":
                 selector = self._build_selector(target)
-                # 先等待元素存在
-                await self._page.wait_for_selector(selector, timeout=timeout)
+                # 先等待元素可见（与其他操作保持一致）
+                await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
                 element = await self._page.query_selector(selector)
                 if element:
                     text = await element.inner_text()
@@ -266,10 +266,15 @@ class ChromeAdapter(BaseAdapter):
             
             elif action == "screenshot":
                 # 支持保存到文件：options={"path": "/path/to/file.png"}
+                import os
                 path = options.get("path")
                 full_page = options.get("full_page", False)
                 
                 if path:
+                    # 校验目录是否存在
+                    dir_path = os.path.dirname(path)
+                    if dir_path and not os.path.exists(dir_path):
+                        return {"success": False, "error": f"目录不存在: {dir_path}"}
                     # 保存到文件
                     await self._page.screenshot(path=path, full_page=full_page)
                     return {"success": True, "path": path}
@@ -314,8 +319,7 @@ class ChromeAdapter(BaseAdapter):
                 if not script:
                     return {"success": False, "error": "execute 操作需要提供 JavaScript 代码"}
                 result = await self._page.evaluate(script)
-                # 处理 None 返回值，转为空字符串或 null
-                return {"success": True, "data": result if result is not None else None}
+                return {"success": True, "data": result}
             
             elif action == "focus":
                 await self._page.bring_to_front()
@@ -363,6 +367,9 @@ class ChromeAdapter(BaseAdapter):
                 to_sel = target.get("to")
                 if not from_sel or not to_sel:
                     return {"success": False, "error": "drag 操作需要 from 和 to 参数"}
+                # 先等待两个元素都可见
+                await self._page.wait_for_selector(from_sel, state="visible", timeout=timeout)
+                await self._page.wait_for_selector(to_sel, state="visible", timeout=timeout)
                 await self._page.drag_and_drop(from_sel, to_sel, timeout=timeout)
                 return {"success": True}
             
@@ -384,6 +391,8 @@ class ChromeAdapter(BaseAdapter):
                     sel = item.get("selector")
                     val = item.get("value", "")
                     if sel and isinstance(val, str):
+                        # 等待元素可见再填充
+                        await self._page.wait_for_selector(sel, state="visible", timeout=timeout)
                         await self._page.fill(sel, val, timeout=timeout)
                         filled_count += 1
                 return {"success": True, "filled": filled_count}
@@ -416,9 +425,12 @@ class ChromeAdapter(BaseAdapter):
                 name = element_info.get("name")
                 # 通过 role + name 组合定位
                 if role and name:
-                    return f'role={role}[name="{name}"]'
+                    # 转义引号，防止选择器注入
+                    escaped_name = name.replace('"', '\\"')
+                    return f'role={role}[name="{escaped_name}"]'
                 elif name:
-                    return f'text="{name}"'
+                    escaped_name = name.replace('"', '\\"')
+                    return f'text="{escaped_name}"'
                 elif role:
                     return f'role={role}'
             raise ValueError(f"未知的 uid: {uid}，请先调用 take_snapshot 获取最新快照")
@@ -471,8 +483,8 @@ class ChromeAdapter(BaseAdapter):
         # 等待页面加载完成
         try:
             await self._page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass  # 超时也继续，可能页面已经加载好了
+        except Exception as e:
+            logger.debug(f"页面加载等待超时，继续执行: {e}")
         
         # 获取 A11y 树 - 设置 interesting_only=False 以获取所有节点
         snapshot = await self._page.accessibility.snapshot(interesting_only=interesting_only)
@@ -602,7 +614,7 @@ class ChromeAdapter(BaseAdapter):
         
         page = await ctx.new_page()
         if url != self.DEFAULT_BLANK_URL:
-            await page.goto(url)
+            await page.goto(url, wait_until="domcontentloaded")
         self._page = page
         
         return {
@@ -617,7 +629,7 @@ class ChromeAdapter(BaseAdapter):
             page_id: 要关闭的页面ID，None 表示关闭当前页面
             
         Raises:
-            ValueError: page_id 超出有效范围
+            ValueError: page_id 超出有效范围或没有可用页面
         """
         all_pages = []
         if self._browser:
@@ -628,6 +640,8 @@ class ChromeAdapter(BaseAdapter):
         
         # 确定要关闭的页面
         if page_id is not None:
+            if not all_pages:
+                raise ValueError("没有可用的页面")
             if not (0 <= page_id < len(all_pages)):
                 raise ValueError(f"page_id {page_id} 超出范围，有效范围: 0-{len(all_pages) - 1}")
             target_page = all_pages[page_id]
