@@ -56,7 +56,7 @@ class ChromeAdapter(BaseAdapter):
         id="chrome",
         name="Google Chrome",
         type=AdapterType.BROWSER,
-        version="2.1.1",  # 修复资源泄漏、空指针等问题
+        version="2.2.0",  # 修复元素交互、A11y快照、JS执行、截图保存
         platforms=["windows", "macos", "linux"],
         actions=[
             # 原有能力
@@ -235,22 +235,29 @@ class ChromeAdapter(BaseAdapter):
                 url = value if isinstance(value, str) else target.get("url") if target else None
                 if not url:
                     return {"success": False, "error": "goto 操作需要提供 url"}
-                await self._page.goto(url, timeout=timeout)
+                # 等待页面加载到 domcontentloaded 状态
+                await self._page.goto(url, timeout=timeout, wait_until="domcontentloaded")
                 return {"success": True, "data": {"url": self._page.url}}
             
             elif action == "click":
                 selector = self._build_selector(target)
+                # 先等待元素可见再点击
+                await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
                 await self._page.click(selector, timeout=timeout)
                 return {"success": True}
             
             elif action == "type":
                 selector = self._build_selector(target)
                 text = value or ""
+                # 先等待元素可见再填充
+                await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
                 await self._page.fill(selector, text, timeout=timeout)
                 return {"success": True}
             
             elif action == "read":
                 selector = self._build_selector(target)
+                # 先等待元素存在
+                await self._page.wait_for_selector(selector, timeout=timeout)
                 element = await self._page.query_selector(selector)
                 if element:
                     text = await element.inner_text()
@@ -258,9 +265,19 @@ class ChromeAdapter(BaseAdapter):
                 return {"success": False, "error": "Element not found"}
             
             elif action == "screenshot":
-                screenshot = await self._page.screenshot()
-                b64 = base64.b64encode(screenshot).decode()
-                return {"success": True, "screenshot": b64}
+                # 支持保存到文件：options={"path": "/path/to/file.png"}
+                path = options.get("path")
+                full_page = options.get("full_page", False)
+                
+                if path:
+                    # 保存到文件
+                    await self._page.screenshot(path=path, full_page=full_page)
+                    return {"success": True, "path": path}
+                else:
+                    # 返回 base64
+                    screenshot = await self._page.screenshot(full_page=full_page)
+                    b64 = base64.b64encode(screenshot).decode()
+                    return {"success": True, "screenshot": b64}
             
             elif action == "list_elements":
                 elements = await self._get_interactive_elements()
@@ -294,8 +311,11 @@ class ChromeAdapter(BaseAdapter):
             
             elif action == "execute":
                 script = value or ""
+                if not script:
+                    return {"success": False, "error": "execute 操作需要提供 JavaScript 代码"}
                 result = await self._page.evaluate(script)
-                return {"success": True, "data": result}
+                # 处理 None 返回值，转为空字符串或 null
+                return {"success": True, "data": result if result is not None else None}
             
             elif action == "focus":
                 await self._page.bring_to_front()
@@ -331,6 +351,8 @@ class ChromeAdapter(BaseAdapter):
             # 更多交互操作
             elif action == "hover":
                 selector = self._build_selector(target)
+                # 先等待元素可见
+                await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
                 await self._page.hover(selector, timeout=timeout)
                 return {"success": True}
             
@@ -435,18 +457,33 @@ class ChromeAdapter(BaseAdapter):
     
     # ==================== 新增辅助方法 ====================
     
-    async def _take_accessibility_snapshot(self) -> str:
+    async def _take_accessibility_snapshot(self, interesting_only: bool = False) -> str:
         """
         获取 A11y 树快照，返回带 uid 的可访问性树。
         类似 Chrome DevTools MCP 的 take_snapshot 能力。
         
+        Args:
+            interesting_only: 是否只返回有交互意义的节点（默认 False，返回所有节点）
+        
         Returns:
             str: 格式化的 A11y 树文本表示，如果快照为空则返回空字符串
         """
-        # 获取 A11y 树
-        snapshot = await self._page.accessibility.snapshot()
+        # 等待页面加载完成
+        try:
+            await self._page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass  # 超时也继续，可能页面已经加载好了
+        
+        # 获取 A11y 树 - 设置 interesting_only=False 以获取所有节点
+        snapshot = await self._page.accessibility.snapshot(interesting_only=interesting_only)
         
         if not snapshot:
+            # 尝试再次获取，可能需要等待渲染
+            await self._page.wait_for_timeout(500)
+            snapshot = await self._page.accessibility.snapshot(interesting_only=interesting_only)
+        
+        if not snapshot:
+            logger.warning("A11y 快照返回空，页面可能不支持或未完全加载")
             return ""
         
         # 为每个元素分配 uid 并缓存
