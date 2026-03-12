@@ -56,7 +56,7 @@ class ChromeAdapter(BaseAdapter):
         id="chrome",
         name="Google Chrome",
         type=AdapterType.BROWSER,
-        version="2.2.1",  # 代码审查全量修复
+        version="2.3.0",  # 修复元素定位、A11y快照fallback、JS执行返回值
         platforms=["windows", "macos", "linux"],
         actions=[
             # 原有能力
@@ -240,29 +240,31 @@ class ChromeAdapter(BaseAdapter):
                 return {"success": True, "data": {"url": self._page.url}}
             
             elif action == "click":
-                selector = self._build_selector(target)
-                # 先等待元素可见再点击
-                await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
-                await self._page.click(selector, timeout=timeout)
+                # 尝试多种定位策略
+                element = await self._find_element_with_fallback(target, timeout)
+                if not element:
+                    return {"success": False, "error": f"无法找到可点击的元素: {target}"}
+                await element.click(timeout=timeout)
                 return {"success": True}
             
             elif action == "type":
-                selector = self._build_selector(target)
                 text = value or ""
-                # 先等待元素可见再填充
-                await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
-                await self._page.fill(selector, text, timeout=timeout)
+                # 尝试多种定位策略
+                element = await self._find_element_with_fallback(target, timeout)
+                if not element:
+                    return {"success": False, "error": f"无法找到可输入的元素: {target}"}
+                # 使用 Playwright 的 locator fill 方法
+                await element.fill(text, timeout=timeout)
                 return {"success": True}
             
             elif action == "read":
-                selector = self._build_selector(target)
-                # 先等待元素可见（与其他操作保持一致）
-                await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
-                element = await self._page.query_selector(selector)
-                if element:
-                    text = await element.inner_text()
-                    return {"success": True, "data": text}
-                return {"success": False, "error": "Element not found"}
+                # 尝试多种定位策略
+                element = await self._find_element_with_fallback(target, timeout)
+                if not element:
+                    return {"success": False, "error": f"无法找到可读取的元素: {target}"}
+                # 获取元素文本内容
+                text = await element.inner_text()
+                return {"success": True, "data": text}
             
             elif action == "screenshot":
                 # 支持保存到文件：options={"path": "/path/to/file.png"}
@@ -318,8 +320,21 @@ class ChromeAdapter(BaseAdapter):
                 script = value or ""
                 if not script:
                     return {"success": False, "error": "execute 操作需要提供 JavaScript 代码"}
-                result = await self._page.evaluate(script)
-                return {"success": True, "data": result}
+                try:
+                    result = await self._page.evaluate(script)
+                    # 处理 None 返回值，确保结果可序列化
+                    if result is None:
+                        return {"success": True, "data": None, "result_type": "None"}
+                    # 处理复杂对象，确保可以 JSON 序列化
+                    try:
+                        json.dumps(result)
+                        return {"success": True, "data": result, "result_type": type(result).__name__}
+                    except (TypeError, ValueError):
+                        # 不可序列化的对象转为字符串
+                        return {"success": True, "data": str(result), "result_type": "str"}
+                except Exception as e:
+                    logger.error(f"JavaScript 执行失败: {e}")
+                    return {"success": False, "error": f"JavaScript 执行失败: {str(e)}"}
             
             elif action == "focus":
                 await self._page.bring_to_front()
@@ -329,8 +344,17 @@ class ChromeAdapter(BaseAdapter):
             
             # A11y 树快照 - 核心能力，支持 uid 定位
             elif action == "take_snapshot":
-                snapshot = await self._take_accessibility_snapshot()
-                return {"success": True, "snapshot": snapshot}
+                result = await self._take_accessibility_snapshot()
+                if result.get("success"):
+                    return {
+                        "success": True, 
+                        "snapshot": result.get("snapshot", ""),
+                        "snapshot_type": result.get("snapshot_type", "unknown"),
+                        "elements": result.get("elements", []),
+                        "element_count": result.get("element_count", 0)
+                    }
+                else:
+                    return {"success": False, "error": result.get("error", "快照失败")}
             
             # 多页面管理
             elif action == "list_pages":
@@ -469,16 +493,16 @@ class ChromeAdapter(BaseAdapter):
     
     # ==================== 新增辅助方法 ====================
     
-    async def _take_accessibility_snapshot(self, interesting_only: bool = False) -> str:
+    async def _take_accessibility_snapshot(self, interesting_only: bool = False) -> Dict[str, Any]:
         """
         获取 A11y 树快照，返回带 uid 的可访问性树。
-        类似 Chrome DevTools MCP 的 take_snapshot 能力。
+        如果 A11y API 返回空，则使用 DOM 快照作为 fallback。
         
         Args:
             interesting_only: 是否只返回有交互意义的节点（默认 False，返回所有节点）
         
         Returns:
-            str: 格式化的 A11y 树文本表示，如果快照为空则返回空字符串
+            Dict: 包含快照数据的字典
         """
         # 等待页面加载完成
         try:
@@ -486,21 +510,21 @@ class ChromeAdapter(BaseAdapter):
         except Exception as e:
             logger.debug(f"页面加载等待超时，继续执行: {e}")
         
-        # 获取 A11y 树 - 设置 interesting_only=False 以获取所有节点
-        snapshot = await self._page.accessibility.snapshot(interesting_only=interesting_only)
-        
-        if not snapshot:
-            # 尝试再次获取，可能需要等待渲染
-            await self._page.wait_for_timeout(500)
+        # 获取 A11y 树
+        snapshot = None
+        try:
             snapshot = await self._page.accessibility.snapshot(interesting_only=interesting_only)
+        except Exception as e:
+            logger.debug(f"A11y snapshot 失败: {e}")
         
+        # 如果 A11y 快照为空，使用 DOM 快照作为 fallback
         if not snapshot:
-            logger.warning("A11y 快照返回空，页面可能不支持或未完全加载")
-            return ""
+            logger.info("A11y 快照为空，使用 DOM fallback")
+            return await self._take_dom_snapshot()
         
         # 为每个元素分配 uid 并缓存
         self._snapshot_elements = {}
-        uid_counter = [0]  # 用列表包装以便在闭包中修改
+        uid_counter = [0]
         
         def assign_uids(node: dict, prefix: str = "") -> dict:
             """递归为节点分配 uid"""
@@ -511,14 +535,13 @@ class ChromeAdapter(BaseAdapter):
             uid_counter[0] += 1
             node["uid"] = uid
             
-            # 缓存元素信息用于后续定位
+            # 缓存元素信息
             self._snapshot_elements[uid] = {
                 "role": node.get("role"),
                 "name": node.get("name"),
                 "value": node.get("value"),
             }
             
-            # 递归处理子节点
             if "children" in node:
                 for child in node["children"]:
                     assign_uids(child, prefix)
@@ -527,8 +550,94 @@ class ChromeAdapter(BaseAdapter):
         
         assign_uids(snapshot, self.UID_PREFIX)
         
-        # 格式化输出
-        return self._format_snapshot(snapshot)
+        return {
+            "success": True,
+            "snapshot_type": "accessibility",
+            "snapshot": self._format_snapshot(snapshot),
+            "elements": list(self._snapshot_elements.values()),
+            "element_count": len(self._snapshot_elements)
+        }
+    
+    async def _take_dom_snapshot(self) -> Dict[str, Any]:
+        """
+        DOM 快照作为 A11y 快照的 fallback
+        提取页面中所有可交互元素
+        """
+        try:
+            elements = await self._page.evaluate("""
+                () => {
+                    const interactiveSelectors = [
+                        'button', 'a', 'input', 'select', 'textarea',
+                        '[role="button"]', '[role="link"]', '[role="input"]',
+                        '[onclick]', '[tabindex]:not([tabindex="-1"])'
+                    ];
+                    
+                    const elements = [];
+                    interactiveSelectors.forEach(selector => {
+                        document.querySelectorAll(selector).forEach((el, idx) => {
+                            const rect = el.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0) {  // 可见元素
+                                elements.push({
+                                    tag: el.tagName.toLowerCase(),
+                                    role: el.getAttribute('role') || el.tagName.toLowerCase(),
+                                    name: el.getAttribute('aria-label') || 
+                                          el.getAttribute('placeholder') ||
+                                          el.textContent?.slice(0, 100) ||
+                                          el.value ||
+                                          el.name ||
+                                          el.id ||
+                                          `element_${idx}`,
+                                    id: el.id || null,
+                                    class: el.className || null,
+                                    type: el.type || null,
+                                    href: el.href || null,
+                                    visible: true
+                                });
+                            }
+                        });
+                    });
+                    
+                    // 去重
+                    return elements.filter((el, idx, self) => 
+                        idx === self.findIndex(e => 
+                            e.name === el.name && e.tag === el.tag
+                        )
+                    ).slice(0, 100);  // 限制数量
+                }
+            """)
+            
+            # 为 DOM 元素分配 uid
+            self._snapshot_elements = {}
+            for i, el in enumerate(elements):
+                uid = f"{self.UID_PREFIX}dom_{i}"
+                el["uid"] = uid
+                self._snapshot_elements[uid] = el
+            
+            # 格式化输出
+            lines = ["DOM Snapshot (fallback):"]
+            for el in elements:
+                line = f"  [{el['tag']}] {el['name'][:50]}"
+                if el['id']:
+                    line += f" (id={el['id']})"
+                lines.append(line)
+            
+            return {
+                "success": True,
+                "snapshot_type": "dom_fallback",
+                "snapshot": "\n".join(lines),
+                "elements": elements,
+                "element_count": len(elements)
+            }
+            
+        except Exception as e:
+            logger.error(f"DOM 快照失败: {e}")
+            return {
+                "success": False,
+                "snapshot_type": "error",
+                "error": str(e),
+                "elements": [],
+                "element_count": 0
+            }
     
     def _format_snapshot(self, node: dict, indent: int = 0) -> str:
         """格式化 A11y 树为文本表示"""
@@ -663,3 +772,92 @@ class ChromeAdapter(BaseAdapter):
     def get_element_by_uid(self, uid: str) -> Optional[Dict[str, Any]]:
         """通过 uid 获取缓存的元素信息"""
         return self._snapshot_elements.get(uid)
+    
+    async def _find_element_with_fallback(
+        self, 
+        target: Optional[Dict[str, Any]], 
+        timeout: int = 10000
+    ) -> Optional[Any]:
+        """
+        多策略元素定位，带 fallback 机制
+        
+        尝试顺序：
+        1. CSS selector
+        2. Playwright role locator
+        3. Text content
+        4. Placeholder attribute
+        5. XPath
+        """
+        if not target:
+            return None
+        
+        strategies = []
+        
+        # 策略1: CSS selector
+        if target.get("css"):
+            css = target["css"]
+            strategies.append(lambda: self._page.locator(css))
+        
+        # 策略2: Role + name ( accessibility )
+        if target.get("role"):
+            role = target["role"]
+            name = target.get("name")
+            strategies.append(lambda r=role, n=name: 
+                self._page.get_by_role(r, name=n) if n else self._page.get_by_role(r))
+        
+        # 策略3: Text content
+        if target.get("name"):
+            text = target["name"]
+            strategies.append(lambda t=text: self._page.get_by_text(t, exact=False))
+        
+        # 策略4: Placeholder (for input elements)
+        if target.get("placeholder"):
+            ph = target["placeholder"]
+            strategies.append(lambda p=ph: self._page.get_by_placeholder(p))
+        
+        # 策略5: XPath
+        if target.get("xpath"):
+            xpath = target["xpath"]
+            strategies.append(lambda x=xpath: self._page.locator(f"xpath={x}"))
+        
+        # 策略6: UID (from snapshot)
+        if target.get("uid"):
+            uid = target["uid"]
+            element_info = self._snapshot_elements.get(uid)
+            if element_info:
+                role = element_info.get("role")
+                name = element_info.get("name")
+                if role and name:
+                    strategies.append(lambda r=role, n=name: 
+                        self._page.get_by_role(r, name=n))
+        
+        # 尝试每种策略
+        last_error = None
+        for i, strategy in enumerate(strategies):
+            try:
+                locator = strategy()
+                if locator:
+                    # 等待元素可见
+                    await locator.wait_for(state="visible", timeout=timeout)
+                    # 确认元素存在
+                    count = await locator.count()
+                    if count > 0:
+                        logger.debug(f"策略 {i+1} 成功定位元素: {target}")
+                        return locator
+            except Exception as e:
+                last_error = e
+                continue
+        
+        # 所有策略都失败，尝试通用的 query_selector 作为最后手段
+        try:
+            if target.get("css"):
+                selector = target["css"]
+                await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
+                element = await self._page.query_selector(selector)
+                if element:
+                    return self._page.locator(selector)
+        except Exception as e:
+            last_error = e
+        
+        logger.warning(f"所有定位策略都失败: {target}, 最后错误: {last_error}")
+        return None
