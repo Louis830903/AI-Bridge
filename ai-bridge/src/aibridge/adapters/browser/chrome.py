@@ -26,22 +26,30 @@ def get_playwright():
 
 class ChromeAdapter(BaseAdapter):
     """
-    Chrome browser adapter using Playwright + CDP.
+    Chrome browser adapter using Playwright.
+    
+    支持两种启动模式：
+    - launch（默认）: 自动启动浏览器，无需手动配置
+    - connect: 连接已有浏览器（CDP模式）
     
     实现与 Chrome DevTools MCP 同等能力：
     - take_snapshot: A11y 树快照，带 uid 定位
     - 多页面管理: list_pages/select_page/new_page/close_page
     - 交互操作: hover/drag/press_key/fill_form
     
-    Requires Chrome to be running with remote debugging enabled:
-        chrome.exe --remote-debugging-port=9222
+    使用方式：
+        # 方式1: 自动启动（推荐，开箱即用）
+        adapter = ChromeAdapter()  # 或 ChromeAdapter({"mode": "launch"})
+        
+        # 方式2: 连接已有浏览器（需手动启动 Chrome）
+        adapter = ChromeAdapter({"mode": "connect", "cdp_url": "http://localhost:9222"})
     """
     
     info = AdapterInfo(
         id="chrome",
         name="Google Chrome",
         type=AdapterType.BROWSER,
-        version="2.0.0",  # 升级版本
+        version="2.1.0",  # 升级版本：支持自动启动
         platforms=["windows", "macos", "linux"],
         actions=[
             # 原有能力
@@ -57,7 +65,7 @@ class ChromeAdapter(BaseAdapter):
             # 新增能力 - 网络/控制台
             "get_url", "get_title",
         ],
-        description="Chrome browser automation via CDP - 同 Chrome DevTools MCP 同等能力",
+        description="Chrome browser automation - 支持自动启动，开箱即用",
     )
     
     # 配置常量
@@ -66,41 +74,79 @@ class ChromeAdapter(BaseAdapter):
     MAX_TEXT_LENGTH = 100
     DEFAULT_TIMEOUT = 10000
     
+    # 启动模式
+    MODE_LAUNCH = "launch"    # 自动启动浏览器（默认）
+    MODE_CONNECT = "connect"  # 连接已有浏览器（CDP）
+    
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
+        # 启动模式：launch（默认）或 connect
+        self.mode = self.config.get("mode", self.MODE_LAUNCH)
+        # CDP 连接地址（仅 connect 模式使用）
         self.cdp_url = self.config.get("cdp_url", "http://localhost:9222")
+        # launch 模式配置
+        self.headless = self.config.get("headless", False)  # 默认有头模式，方便调试
+        self.user_data_dir = self.config.get("user_data_dir", None)  # 用户数据目录，可选
+        self.slow_mo = self.config.get("slow_mo", 0)  # 操作延迟，方便观察
+        
         self._playwright = None
         self._browser = None
+        self._context = None
         self._page = None
         # A11y 快照中的元素缓存，用于 uid 定位（实例变量，避免多实例共享）
         self._snapshot_elements: Dict[str, Any] = {}
     
     async def connect(self) -> bool:
-        """Connect to Chrome via CDP."""
+        """Connect to Chrome - 支持 launch 和 connect 两种模式"""
         try:
             async_playwright = get_playwright()
             self._playwright = await async_playwright().start()
-            self._browser = await self._playwright.chromium.connect_over_cdp(self.cdp_url)
             
-            # Get the first page
-            contexts = self._browser.contexts
-            if contexts and contexts[0].pages:
-                self._page = contexts[0].pages[0]
+            if self.mode == self.MODE_CONNECT:
+                # CDP 模式：连接已有浏览器
+                self._browser = await self._playwright.chromium.connect_over_cdp(self.cdp_url)
+                # 获取已有页面
+                contexts = self._browser.contexts
+                if contexts and contexts[0].pages:
+                    self._context = contexts[0]
+                    self._page = contexts[0].pages[0]
+                else:
+                    self._context = await self._browser.new_context()
+                    self._page = await self._context.new_page()
             else:
-                # Create a new page if none exists
-                context = await self._browser.new_context()
-                self._page = await context.new_page()
+                # Launch 模式：自动启动浏览器（默认）
+                launch_options = {
+                    "headless": self.headless,
+                    "slow_mo": self.slow_mo,
+                }
+                
+                # 如果指定了用户数据目录，使用 launch_persistent_context
+                if self.user_data_dir:
+                    self._context = await self._playwright.chromium.launch_persistent_context(
+                        self.user_data_dir,
+                        **launch_options
+                    )
+                    self._browser = None  # persistent context 没有 browser 对象
+                    self._page = self._context.pages[0] if self._context.pages else await self._context.new_page()
+                else:
+                    # 普通启动
+                    self._browser = await self._playwright.chromium.launch(**launch_options)
+                    self._context = await self._browser.new_context()
+                    self._page = await self._context.new_page()
             
             self._connected = True
             return True
         except Exception as e:
             self._connected = False
-            raise ConnectionError(f"Failed to connect to Chrome: {e}")
+            raise ConnectionError(f"Failed to connect/launch Chrome: {e}")
     
     async def disconnect(self) -> bool:
         """Disconnect from Chrome."""
         try:
-            if self._browser:
+            if self._context and self.user_data_dir:
+                # persistent context 需要单独关闭
+                await self._context.close()
+            elif self._browser:
                 await self._browser.close()
             if self._playwright:
                 await self._playwright.stop()
@@ -114,15 +160,29 @@ class ChromeAdapter(BaseAdapter):
         """Check if Chrome is available."""
         pw = None
         browser = None
+        context = None
         try:
             async_playwright = get_playwright()
             pw = await async_playwright().start()
-            browser = await pw.chromium.connect_over_cdp(self.cdp_url)
-            await browser.close()
+            
+            if self.mode == self.MODE_CONNECT:
+                # CDP 模式：检查是否能连接
+                browser = await pw.chromium.connect_over_cdp(self.cdp_url)
+                await browser.close()
+            else:
+                # Launch 模式：检查是否能启动
+                browser = await pw.chromium.launch(headless=True)
+                await browser.close()
+            
             await pw.stop()
             return True
         except Exception:
-            # Clean up resources in case of partial initialization
+            # 清理资源
+            if context:
+                try:
+                    await context.close()
+                except Exception:
+                    pass
             if browser:
                 try:
                     await browser.close()
@@ -421,7 +481,15 @@ class ChromeAdapter(BaseAdapter):
     async def _list_pages(self) -> List[Dict[str, Any]]:
         """列出所有页面"""
         pages = []
-        for ctx in self._browser.contexts:
+        # 支持 browser 模式和 persistent context 模式
+        if self._browser:
+            contexts = self._browser.contexts
+        elif self._context:
+            contexts = [self._context]
+        else:
+            return pages
+        
+        for ctx in contexts:
             for i, page in enumerate(ctx.pages):
                 pages.append({
                     "id": len(pages),
@@ -434,8 +502,11 @@ class ChromeAdapter(BaseAdapter):
     async def _select_page(self, page_id: int) -> bool:
         """选择指定页面，返回是否成功"""
         all_pages = []
-        for ctx in self._browser.contexts:
-            all_pages.extend(ctx.pages)
+        if self._browser:
+            for ctx in self._browser.contexts:
+                all_pages.extend(ctx.pages)
+        elif self._context:
+            all_pages = list(self._context.pages)
         
         if not (0 <= page_id < len(all_pages)):
             raise ValueError(f"page_id {page_id} 超出范围，当前共 {len(all_pages)} 个页面")
@@ -446,7 +517,13 @@ class ChromeAdapter(BaseAdapter):
     
     async def _new_page(self, url: str = "about:blank") -> Dict[str, Any]:
         """新建页面"""
-        ctx = self._browser.contexts[0] if self._browser.contexts else await self._browser.new_context()
+        if self._context:
+            ctx = self._context
+        elif self._browser and self._browser.contexts:
+            ctx = self._browser.contexts[0]
+        else:
+            ctx = await self._browser.new_context()
+        
         page = await ctx.new_page()
         if url != "about:blank":
             await page.goto(url)
@@ -460,8 +537,11 @@ class ChromeAdapter(BaseAdapter):
     async def _close_page(self, page_id: Optional[int] = None) -> None:
         """关闭页面"""
         all_pages = []
-        for ctx in self._browser.contexts:
-            all_pages.extend(ctx.pages)
+        if self._browser:
+            for ctx in self._browser.contexts:
+                all_pages.extend(ctx.pages)
+        elif self._context:
+            all_pages = list(self._context.pages)
         
         if page_id is not None and 0 <= page_id < len(all_pages):
             target_page = all_pages[page_id]
