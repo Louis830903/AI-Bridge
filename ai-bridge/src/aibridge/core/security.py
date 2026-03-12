@@ -1,32 +1,14 @@
 """
 Security Policy - 安全沙箱和权限控制
 
-提供企业级的安全控制，包括:
+提供企业级的安全控制,包括:
 - 域名白名单/黑名单
 - 操作权限控制
 - 敏感操作确认
 - 资源使用限制
-
-使用示例:
-```python
-# 创建带安全策略的适配器
-adapter = ChromeAdapter(
-    security_policy={
-        "allowlist": ["*.baidu.com", "*.github.com"],
-        "blocked_actions": ["download", "upload"],
-        "require_confirmation_for": ["click", "type"]
-    }
-)
-```
 """
 
 import asyncio
-
-# 敏感操作需要确认
-await adapter.execute("click", target={"css": "#submit"}, options={"require_confirmation": True})
-```
-"""
-
 import fnmatch
 import logging
 from typing import Any, Dict, List, Optional, Set, Callable
@@ -53,7 +35,7 @@ class SecurityPolicy:
     blocklist: List[str] = field(default_factory=list)      # 禁止的域名
     
     # 操作控制
-    allowed_actions: Optional[List[str]] = None              # 允许的操作列表，None表示全部
+    allowed_actions: Optional[List[str]] = None              # 允许的操作列表,None表示全部
     blocked_actions: List[str] = field(default_factory=list) # 禁止的操作列表
     
     # 敏感操作确认
@@ -72,8 +54,8 @@ class SecurityPolicy:
 class SecurityManager:
     """
     安全管理器
-    
-    负责执行安全策略和权限控制。
+
+    负责执行安全策略和权限控制.
     """
     
     # 敏感操作列表
@@ -192,7 +174,7 @@ class SecurityManager:
                 "level": PermissionLevel.DENY
             }
         
-        # 检查是否在允许列表（如果配置了允许列表）
+        # 检查是否在允许列表(如果配置了允许列表)
         if self.policy.allowed_actions is not None:
             if action not in self.policy.allowed_actions:
                 self.stats["actions_blocked"] += 1
@@ -237,7 +219,7 @@ class SecurityManager:
         """
         self.stats["actions_confirmed"] += 1
         
-        # 如果有回调函数，使用回调
+        # 如果有回调函数,使用回调
         if self.confirmation_callback:
             try:
                 result = self.confirmation_callback(action, params)
@@ -248,7 +230,7 @@ class SecurityManager:
                 logger.error(f"确认回调异常: {e}")
                 return False
         
-        # 默认行为：记录日志并允许（生产环境应该拒绝）
+        # 默认行为:记录日志并允许(生产环境应该拒绝)
         logger.warning(f"需要确认但没有设置回调: {action}")
         return True
     
@@ -302,11 +284,11 @@ class SecurityManager:
     
     def _match_pattern(self, text: str, pattern: str) -> bool:
         """
-        匹配模式（支持通配符）
+        匹配模式(支持通配符)
         
         Args:
             text: 要匹配的文本
-            pattern: 模式（如 *.baidu.com）
+            pattern: 模式(如 *.baidu.com)
         
         Returns:
             是否匹配
@@ -322,7 +304,7 @@ class SecurityManager:
         """
         清理敏感参数
         
-        移除密码、token 等敏感信息。
+        移除密码,token 等敏感信息.
         """
         if not params:
             return params
@@ -353,7 +335,7 @@ class SecureAdapterWrapper:
     """
     安全适配器包装器
     
-    包装现有适配器，添加安全控制。
+    包装现有适配器,添加安全控制.
     """
     
     def __init__(self, adapter, security_policy: Optional[SecurityPolicy] = None):
@@ -371,7 +353,7 @@ class SecureAdapterWrapper:
         """
         安全执行操作
         
-        在执行前进行权限检查。
+        在执行前进行权限检查.
         """
         options = options or {}
         
@@ -383,7 +365,7 @@ class SecureAdapterWrapper:
                 "error": f"资源限制 exceeded: {limit_check['violations']}"
             }
         
-        # 2. 如果是导航操作，检查 URL
+        # 2. 如果是导航操作,检查 URL
         if action == "goto" and target:
             url = target.get("url") if isinstance(target, dict) else target
             if url:
