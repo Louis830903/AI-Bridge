@@ -56,7 +56,7 @@ class ChromeAdapter(BaseAdapter):
         id="chrome",
         name="Google Chrome",
         type=AdapterType.BROWSER,
-        version="2.3.1",  # 修复hidden元素支持、A11y快照类型安全
+        version="2.3.2",  # 修复_format_snapshot递归问题
         platforms=["windows", "macos", "linux"],
         actions=[
             # 原有能力
@@ -703,7 +703,7 @@ class ChromeAdapter(BaseAdapter):
     
     def _format_snapshot(self, node: dict, indent: int = 0) -> str:
         """格式化 A11y 树为文本表示"""
-        if not node:
+        if not node or not isinstance(node, dict):
             return ""
         
         lines = []
@@ -724,9 +724,12 @@ class ChromeAdapter(BaseAdapter):
         lines.append(f"{prefix}{' '.join(desc_parts)}")
         
         # 递归处理子节点
-        if "children" in node:
-            for child in node["children"]:
-                lines.append(self._format_snapshot(child, indent + 1))
+        children = node.get("children", [])
+        if isinstance(children, list):
+            for child in children:
+                child_lines = self._format_snapshot(child, indent + 1)
+                if child_lines:
+                    lines.append(child_lines)
         
         return "\n".join(filter(None, lines))
     
