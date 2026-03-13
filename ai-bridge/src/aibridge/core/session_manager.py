@@ -206,7 +206,17 @@ class SessionManager:
             if session_data.local_storage:
                 try:
                     for key, value in session_data.local_storage.items():
-                        await page.evaluate(f'localStorage.setItem("{key}", JSON.stringify({json.dumps(value)}))')
+                        # 安全：使用参数化调用，避免 JS 注入
+                        await page.evaluate(
+                            """(k, v) => {
+                                try {
+                                    localStorage.setItem(k, JSON.stringify(v));
+                                } catch(e) {
+                                    console.error('localStorage set error:', e);
+                                }
+                            }""",
+                            key, value
+                        )
                     logger.info(f"已恢复 {len(session_data.local_storage)} 个 localStorage 项")
                 except Exception as e:
                     logger.warning(f"恢复 localStorage 失败: {e}")
@@ -215,7 +225,17 @@ class SessionManager:
             if session_data.session_storage:
                 try:
                     for key, value in session_data.session_storage.items():
-                        await page.evaluate(f'sessionStorage.setItem("{key}", JSON.stringify({json.dumps(value)}))')
+                        # 安全：使用参数化调用，避免 JS 注入
+                        await page.evaluate(
+                            """(k, v) => {
+                                try {
+                                    sessionStorage.setItem(k, JSON.stringify(v));
+                                } catch(e) {
+                                    console.error('sessionStorage set error:', e);
+                                }
+                            }""",
+                            key, value
+                        )
                     logger.info(f"已恢复 {len(session_data.session_storage)} 个 sessionStorage 项")
                 except Exception as e:
                     logger.warning(f"恢复 sessionStorage 失败: {e}")

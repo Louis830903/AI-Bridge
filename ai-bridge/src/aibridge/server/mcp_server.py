@@ -206,6 +206,7 @@ class AIBridgeMCPServer:
         self.orchestrator: Optional[Orchestrator] = None
         self._connected = False
         self._shutdown_event: Optional[asyncio.Event] = None
+        self._shutdown_event: Optional[asyncio.Event] = None
     
     async def initialize(self):
         """初始化所有组件"""
@@ -228,6 +229,10 @@ class AIBridgeMCPServer:
     async def shutdown(self):
         """关闭所有组件"""
         logger.info("Shutting down AI-Bridge MCP Server...")
+        
+        # 触发关闭事件
+        if self._shutdown_event:
+            self._shutdown_event.set()
         
         if self.adapter:
             await self.adapter.disconnect()
