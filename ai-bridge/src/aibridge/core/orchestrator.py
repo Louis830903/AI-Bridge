@@ -665,8 +665,32 @@ class Orchestrator:
         logger.info(f"Starting O-R-A task: {goal}")
         logger.info(f"Max steps: {max_steps}")
         
+        # O-R-A 循环防死循环保护
+        visited_states = set()  # 记录已访问状态
+        consecutive_same_state = 0  # 连续相同状态计数
+        
         for step_num in range(1, max_steps + 1):
             logger.info(f"\n--- Step {step_num}/{max_steps} ---")
+            
+            # 检查 adapter 是否仍然连接
+            if not self.adapter or not self.adapter.is_connected:
+                logger.error("Adapter disconnected during task execution")
+                return {
+                    "success": False,
+                    "status": TaskStatus.FAILED,
+                    "steps_taken": step_num - 1,
+                    "error": "Browser adapter disconnected"
+                }
+            
+            # 检查是否被外部取消
+            if hasattr(self, '_cancelled') and self._cancelled:
+                logger.info("Task was cancelled")
+                return {
+                    "success": False,
+                    "status": TaskStatus.CANCELLED,
+                    "steps_taken": step_num - 1,
+                    "error": "Task was cancelled by user"
+                }
             
             # ========== Observation ==========
             logger.info("[Observation] Observing current state...")
@@ -711,6 +735,27 @@ class Orchestrator:
                 screenshot_b64=observation.get("screenshot_b64")
             )
             history.append(step_record)
+            
+            # 防死循环检测：检查是否重复相同的状态
+            state_key = f"{observation.get('url')}:{action}:{hash(str(action_params))}"
+            if state_key in visited_states:
+                consecutive_same_state += 1
+                if consecutive_same_state >= 3:
+                    logger.error(f"检测到死循环：连续 {consecutive_same_state} 次相同状态")
+                    return {
+                        "success": False,
+                        "status": TaskStatus.FAILED,
+                        "steps_taken": step_num,
+                        "error": "Detected infinite loop: repeating same state",
+                        "history": history
+                    }
+            else:
+                consecutive_same_state = 0
+                visited_states.add(state_key)
+            
+            # 防死循环：限制状态历史大小
+            if len(visited_states) > max_steps * 2:
+                visited_states.clear()
             
             # 触发回调
             if self.on_step:

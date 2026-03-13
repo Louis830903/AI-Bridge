@@ -314,7 +314,7 @@ class IntentEngine:
                     continue
         
         # 2. 规则匹配失败，尝试LLM（如果有）
-        if self.use_llm and self.llm_client:
+        if self.use_llm and self.llm_provider:
             return await self._parse_with_llm(intent_text)
         
         # 3. 都失败了
@@ -371,12 +371,27 @@ class IntentEngine:
 
 只返回JSON，不要其他解释。"""
             
-            # 调用共享的LLM
-            response = await self.llm_provider.complete(
-                prompt=prompt,
-                temperature=0.2,
-                max_tokens=500
-            )
+            # 调用共享的LLM，添加超时保护（默认30秒）
+            import asyncio
+            try:
+                response = await asyncio.wait_for(
+                    self.llm_provider.complete(
+                        prompt=prompt,
+                        temperature=0.2,
+                        max_tokens=500
+                    ),
+                    timeout=30.0  # 30秒超时
+                )
+            except asyncio.TimeoutError:
+                logger.error("LLM调用超时（30秒）")
+                return IntentResult(
+                    success=False,
+                    intent_type=IntentType.UNKNOWN,
+                    original_intent=intent_text,
+                    steps=[],
+                    summary="LLM调用超时",
+                    error="LLM request timeout after 30 seconds"
+                )
             
             # 解析JSON响应
             import json
