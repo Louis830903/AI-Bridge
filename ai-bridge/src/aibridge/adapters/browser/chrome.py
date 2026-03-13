@@ -227,6 +227,10 @@ class ChromeAdapter(BaseAdapter):
         if not self._connected or not self._page:
             return {"success": False, "error": "未连接到 Chrome，请先调用 connect()"}
         
+        # 转换 Target 对象为 dict（如果传入的是 Target 对象）
+        if target is not None and hasattr(target, 'to_dict'):
+            target = target.to_dict()
+        
         options = options or {}
         timeout = options.get("timeout", self.DEFAULT_TIMEOUT)
         
@@ -473,8 +477,12 @@ class ChromeAdapter(BaseAdapter):
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _build_selector(self, target: Optional[Dict[str, Any]]) -> str:
+    def _build_selector(self, target) -> str:
         """构建 Playwright 选择器，支持 uid/css/xpath/name/role 多种方式"""
+        # 转换 Target 对象为 dict
+        if target is not None and hasattr(target, 'to_dict'):
+            target = target.to_dict()
+        
         if not target:
             return "*"
         
@@ -844,7 +852,7 @@ class ChromeAdapter(BaseAdapter):
     
     async def _find_element_with_fallback(
         self, 
-        target: Optional[Dict[str, Any]], 
+        target, 
         timeout: int = 10000,
         force: bool = False
     ) -> Optional[Any]:
@@ -852,7 +860,7 @@ class ChromeAdapter(BaseAdapter):
         多策略元素定位，带 fallback 机制
         
         Args:
-            target: 定位目标
+            target: 定位目标 (dict 或 Target 对象)
             timeout: 超时时间
             force: 是否强制操作隐藏元素
         
@@ -863,6 +871,10 @@ class ChromeAdapter(BaseAdapter):
         4. Placeholder attribute
         5. XPath
         """
+        # 转换 Target 对象为 dict
+        if target is not None and hasattr(target, 'to_dict'):
+            target = target.to_dict()
+        
         if not target:
             return None
         
