@@ -205,6 +205,7 @@ class AIBridgeMCPServer:
         self.intent_engine: Optional[IntentEngine] = None
         self.orchestrator: Optional[Orchestrator] = None
         self._connected = False
+        self._shutdown_event: Optional[asyncio.Event] = None
     
     async def initialize(self):
         """初始化所有组件"""
@@ -236,8 +237,22 @@ class AIBridgeMCPServer:
     
     # ============ 工具处理函数 ============
     
+    async def _check_initialized(self) -> Optional[dict]:
+        """检查服务器是否已初始化"""
+        if not self._connected or not self.adapter:
+            return {
+                "success": False,
+                "error": "MCP Server 未初始化，请先调用 initialize()",
+                "summary": "服务器未就绪"
+            }
+        return None
+    
     async def handle_navigate(self, args: dict) -> dict:
         """处理导航请求"""
+        # 空指针保护
+        if error := await self._check_initialized():
+            return error
+        
         url = args.get("url")
         wait_until = args.get("wait_until", "domcontentloaded")
         
@@ -262,6 +277,10 @@ class AIBridgeMCPServer:
     
     async def handle_click(self, args: dict) -> dict:
         """处理点击请求"""
+        # 空指针保护
+        if error := await self._check_initialized():
+            return error
+        
         selector = args.get("selector")
         text = args.get("text")
         force = args.get("force", False)
@@ -287,6 +306,10 @@ class AIBridgeMCPServer:
     
     async def handle_type(self, args: dict) -> dict:
         """处理输入请求"""
+        # 空指针保护
+        if error := await self._check_initialized():
+            return error
+        
         selector = args.get("selector")
         text = args.get("text")
         force = args.get("force", False)
@@ -306,6 +329,10 @@ class AIBridgeMCPServer:
     
     async def handle_extract(self, args: dict) -> dict:
         """处理数据提取请求"""
+        # 空指针保护
+        if error := await self._check_initialized():
+            return error
+        
         selector = args.get("selector")
         fields = args.get("fields", {})
         multiple = args.get("multiple", False)
@@ -475,12 +502,16 @@ async def main():
         
         print("\n按 Ctrl+C 停止服务器\n")
         
-        # 保持运行
-        while True:
-            await asyncio.sleep(1)
+        # 保持运行 - 使用可中断的循环
+        server._shutdown_event = asyncio.Event()
+        try:
+            await server._shutdown_event.wait()
+        except asyncio.CancelledError:
+            pass
             
     except KeyboardInterrupt:
         print("\n\n正在停止服务器...")
+    finally:
         await server.stop()
         print("服务器已停止")
 

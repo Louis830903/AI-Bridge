@@ -297,7 +297,8 @@ class IntentEngine:
         logger.info(f"Parsing intent: {intent_text}")
         
         # 1. 先尝试规则匹配
-        for pattern in self.PATTERNS:
+        patterns = getattr(self, '_patterns', self.PATTERNS)
+        for pattern in patterns:
             match = pattern.match(intent_text)
             if match:
                 try:
@@ -499,11 +500,15 @@ class IntentEngine:
     
     def add_pattern(self, pattern: IntentPattern):
         """添加自定义规则模式"""
-        self.PATTERNS.append(pattern)
+        # 安全：复制类变量到实例变量，避免修改类本身
+        if not hasattr(self, '_patterns'):
+            self._patterns = list(self.PATTERNS)
+        self._patterns.append(pattern)
     
     def list_supported_intents(self) -> List[str]:
         """列出支持的意图类型"""
-        return list(set(p.intent_type.value for p in self.PATTERNS))
+        patterns = getattr(self, '_patterns', self.PATTERNS)
+        return list(set(p.intent_type.value for p in patterns))
 
 
 # ============ 使用示例 ============
