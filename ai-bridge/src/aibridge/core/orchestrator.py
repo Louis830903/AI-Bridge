@@ -1,874 +1,803 @@
 """
-O-R-A 循环 (Observation-Reasoning-Action Loop)
+多 Agent 编排器
 
-观察-推理-行动循环，实现复杂任务的自主完成。
+提供 Agent 协作任务的调度和编排能力：
+- TaskGraph: 任务依赖图
+- Orchestrator: 编排器，调度多 Agent 协作
+- ExecutionPlan: 执行计划
+- ParallelExecutor: 并行执行器
 
-工作流程:
-1. Observation (观察): 获取当前页面状态
-2. Reasoning (推理): 分析状态，决定下一步
-3. Action (行动): 执行具体操作
-4. 循环直到任务完成或达到最大步数
-
-示例任务:
-"在京东搜索 iPhone 15，提取前3个商品的价格和评分"
-
-循环过程:
-Step 1: 观察 → 当前空白页
-        推理 → 需要先导航到京东
-        行动 → goto("https://www.jd.com")
-
-Step 2: 观察 → 京东首页，有搜索框
-        推理 → 需要输入搜索词
-        行动 → type("#search", "iPhone 15")
-
-Step 3: 观察 → 搜索词已输入
-        推理 → 需要点击搜索按钮
-        行动 → click("#search-btn")
-
-Step 4: 观察 → 搜索结果页面
-        推理 → 需要提取商品信息
-        行动 → extract(".goods-item", {"price": "string", "rating": "string"})
-
-Step 5: 任务完成，返回结果
+支持功能：
+- DAG 任务依赖
+- 并行/串行执行
+- 失败重试
+- 超时控制
+- 结果聚合
 """
 
 import asyncio
-import json
 import logging
-from typing import Any, Dict, List, Optional, Callable
+import time
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
-from aibridge.adapters.browser.chrome import ChromeAdapter
-from aibridge.core.intent_engine import IntentEngine, IntentType
+if TYPE_CHECKING:
+    from ..gateway.protocol_bridge import ProtocolBridge
+    from ..enterprise.tracing import Tracer
 
 logger = logging.getLogger(__name__)
 
 
-class TaskStatus(str, Enum):
+class TaskState(Enum):
     """任务状态"""
-    PENDING = "pending"           # 待执行
-    RUNNING = "running"           # 执行中
-    COMPLETED = "completed"       # 已完成
-    FAILED = "failed"            # 失败
-    CANCELLED = "cancelled"      # 已取消
+    PENDING = "pending"       # 等待执行
+    READY = "ready"           # 就绪（依赖已满足）
+    RUNNING = "running"       # 执行中
+    COMPLETED = "completed"   # 完成
+    FAILED = "failed"         # 失败
+    CANCELLED = "cancelled"   # 取消
+    SKIPPED = "skipped"       # 跳过
 
 
 @dataclass
-class StepRecord:
-    """单步执行记录"""
-    step_number: int                    # 步数
-    timestamp: datetime                 # 时间戳
+class TaskNode:
+    """
+    任务节点
     
-    # Observation
-    observation: Dict[str, Any] = field(default_factory=dict)
+    代表执行图中的一个任务。
+    """
+    task_id: str
+    name: str
     
-    # Reasoning
-    reasoning: str = ""                 # 推理过程
-    plan: List[str] = field(default_factory=list)  # 计划
+    # 执行目标
+    agent_id: str                          # 目标 Agent
+    capability: str                        # 能力名称
+    input_data: Dict[str, Any] = field(default_factory=dict)
     
-    # Action
-    action: str = ""                    # 执行的动作
-    action_params: Dict = field(default_factory=dict)
+    # 依赖关系
+    depends_on: Set[str] = field(default_factory=set)  # 依赖的任务 ID
     
-    # Result
-    success: bool = False
-    result_data: Any = None
+    # 执行配置
+    timeout: float = 60.0                  # 超时（秒）
+    retry_count: int = 0                   # 重试次数
+    retry_delay: float = 1.0               # 重试延迟
+    
+    # 运行时状态
+    state: TaskState = TaskState.PENDING
+    result: Any = None
     error: Optional[str] = None
     
-    # 截图（可选）
-    screenshot_b64: Optional[str] = None
-
-
-@dataclass
-class TaskResult:
-    """任务执行结果"""
-    success: bool
-    goal: str
-    status: TaskStatus
-    steps: List[StepRecord]
-    data: Any = None
-    summary: str = ""
-    total_steps: int = 0
-    duration_seconds: float = 0.0
-    error: Optional[str] = None
-
-
-class PageObserver:
-    """
-    页面观察者 - 负责 Observation 阶段
+    # 时间戳
+    created_at: float = field(default_factory=time.time)
+    started_at: Optional[float] = None
+    completed_at: Optional[float] = None
     
-    收集当前页面的状态信息，供 Reasoning 阶段使用。
-    """
-    
-    def __init__(self, adapter: ChromeAdapter):
-        self.adapter = adapter
-    
-    async def observe(self, include_screenshot: bool = True) -> Dict[str, Any]:
-        """
-        观察当前页面状态
-        
-        Returns:
-            页面状态信息，包括:
-            - url: 当前URL
-            - title: 页面标题
-            - elements: 可交互元素
-            - forms: 表单信息
-            - links: 链接信息
-            - screenshot: 截图（可选）
-        """
-        observation = {
-            "timestamp": datetime.now().isoformat(),
-        }
-        
-        try:
-            # 1. 基础信息
-            observation["url"] = self.adapter._page.url if self.adapter._page else None
-            observation["title"] = await self.adapter._page.title() if self.adapter._page else None
-            
-            # 2. 获取可交互元素
-            try:
-                elements = await self.adapter._get_interactive_elements()
-                observation["elements"] = elements[:20]  # 只取前20个避免过多
-                observation["element_count"] = len(elements)
-            except Exception as e:
-                logger.warning(f"Failed to get interactive elements: {e}")
-                observation["elements"] = []
-                observation["element_count"] = 0
-            
-            # 3. 获取A11y快照（结构化视图）
-            try:
-                snapshot_result = await self.adapter._take_accessibility_snapshot()
-                if snapshot_result.get("success"):
-                    observation["a11y_snapshot"] = snapshot_result.get("snapshot", "")[:500]  # 截断
-                    observation["a11y_element_count"] = snapshot_result.get("element_count", 0)
-            except Exception as e:
-                logger.warning(f"Failed to get a11y snapshot: {e}")
-            
-            # 4. 截图
-            if include_screenshot:
-                try:
-                    screenshot = await self.adapter._page.screenshot(full_page=False)
-                    import base64
-                    observation["screenshot_b64"] = base64.b64encode(screenshot).decode()
-                except Exception as e:
-                    logger.warning(f"Failed to take screenshot: {e}")
-            
-            # 5. 页面文本内容（前500字符）
-            try:
-                body_text = await self.adapter._page.evaluate("() => document.body.innerText.slice(0, 500)")
-                observation["body_text_preview"] = body_text
-            except Exception as e:
-                logger.warning(f"Failed to get body text: {e}")
-            
-        except Exception as e:
-            logger.error(f"Observation failed: {e}")
-            observation["error"] = str(e)
-        
-        return observation
-
-
-class ReasoningEngine:
-    """
-    推理引擎 - 负责 Reasoning 阶段
-    
-    根据观察结果，决定下一步行动。
-    支持两种模式:
-    1. 规则推理 - 基于预定义规则
-    2. LLM推理 - 使用大语言模型（可选）
-    """
-    
-    def __init__(self, adapter: ChromeAdapter, llm_provider=None):
-        """
-        初始化推理引擎
-
-        Args:
-            adapter: ChromeAdapter 实例
-            llm_provider: 共享的LLM提供者（可选）
-        """
-        self.adapter = adapter
-        self.llm_provider = llm_provider
-        self.use_llm = llm_provider is not None
-    
-    async def reason(
-        self,
-        goal: str,
-        observation: Dict[str, Any],
-        history: List[StepRecord],
-        remaining_steps: int
-    ) -> Dict[str, Any]:
-        """
-        推理下一步行动
-        
-        Args:
-            goal: 任务目标
-            observation: 当前观察结果
-            history: 历史执行记录
-            remaining_steps: 剩余步数
-        
-        Returns:
-            推理结果，包含:
-            - reasoning: 推理过程说明
-            - action: 建议的行动
-            - action_params: 行动参数
-            - is_complete: 任务是否已完成
-        """
-        
-        # 1. 检查任务是否已完成（基于简单规则）
-        completion_check = self._check_completion(goal, observation, history)
-        if completion_check["is_complete"]:
-            return {
-                "reasoning": completion_check["reason"],
-                "action": "complete",
-                "action_params": {},
-                "is_complete": True
-            }
-        
-        # 2. 基于规则的推理
-        rule_result = self._rule_based_reasoning(goal, observation, history)
-        if rule_result:
-            return rule_result
-        
-        # 3. 使用LLM推理（如果有）
-        if self.use_llm:
-            return await self._llm_reasoning(goal, observation, history, remaining_steps)
-        
-        # 4. 默认：无法推理
-        return {
-            "reasoning": "无法确定下一步行动",
-            "action": "unknown",
-            "action_params": {},
-            "is_complete": False,
-            "error": "No matching reasoning rule found"
-        }
-    
-    def _infer_url_from_goal(self, goal: str) -> str:
-        """
-        从目标推断URL
-        
-        支持多种方式:
-        1. 直接提取 http:// 或 https:// 链接
-        2. 根据关键词推断 (百度 -> baidu.com, 京东 -> jd.com 等)
-        3. 默认返回百度
-        """
-        import re
-        
-        # 1. 直接提取完整URL
-        url_match = re.search(r'(https?://[^\s]+)', goal)
-        if url_match:
-            return url_match.group(1)
-        
-        # 2. 从目标中提取域名
-        domain_match = re.search(r'(?:www\.)?([\w-]+\.(?:com|cn|org|net|io))', goal)
-        if domain_match:
-            return f"https://{domain_match.group(1)}"
-        
-        # 3. 根据关键词推断常用网站
-        goal_lower = goal.lower()
-        url_mapping = {
-            # 中文关键词
-            "百度": "https://www.baidu.com",
-            "baidu": "https://www.baidu.com",
-            "京东": "https://www.jd.com",
-            "jd": "https://www.jd.com",
-            "淘宝": "https://www.taobao.com",
-            "taobao": "https://www.taobao.com",
-            "天猫": "https://www.tmall.com",
-            "tmall": "https://www.tmall.com",
-            "知乎": "https://www.zhihu.com",
-            "zhihu": "https://www.zhihu.com",
-            "微博": "https://weibo.com",
-            "weibo": "https://weibo.com",
-            "GitHub": "https://github.com",
-            "github": "https://github.com",
-            "谷歌": "https://www.google.com",
-            "google": "https://www.google.com",
-            "必应": "https://www.bing.com",
-            "bing": "https://www.bing.com",
-            "搜狗": "https://www.sogou.com",
-            "sogou": "https://www.sogou.com",
-            "B站": "https://www.bilibili.com",
-            "bilibili": "https://www.bilibili.com",
-            "抖音": "https://www.douyin.com",
-            "douyin": "https://www.douyin.com",
-        }
-        
-        for keyword, url in url_mapping.items():
-            if keyword in goal or keyword in goal_lower:
-                return url
-        
-        # 4. 默认返回百度
-        return "https://www.baidu.com"
-    
-    def _check_completion(
-        self,
-        goal: str,
-        observation: Dict[str, Any],
-        history: List[StepRecord]
-    ) -> Dict[str, Any]:
-        """检查任务是否已完成"""
-        
-        # 简单规则：如果已经执行过提取操作且有数据，认为任务完成
-        for step in reversed(history):
-            if step.action == "extract" and step.success and step.result_data:
-                return {
-                    "is_complete": True,
-                    "reason": f"已成功提取数据: {step.result_data}"
-                }
-        
-        # 规则2: 如果目标只是"打开/访问 XXX"，且已经成功导航到目标网站
-        if ("打开" in goal or "访问" in goal or "goto" in goal.lower()) and history:
-            last_goto = None
-            for step in history:
-                if step.action == "goto" and step.success:
-                    last_goto = step
-            
-            if last_goto:
-                # 检查当前URL是否匹配目标
-                current_url = observation.get("url", "")
-                expected_url = self._infer_url_from_goal(goal)
-                
-                # 如果URL匹配或在同一个域名下，认为任务完成
-                if expected_url in current_url or (
-                    last_goto.action_params.get("url") in current_url
-                ):
-                    return {
-                        "is_complete": True,
-                        "reason": f"已成功打开目标网站: {current_url}"
-                    }
-        
-        # 如果目标包含"搜索"且已经导航并输入了搜索词
-        if "搜索" in goal or "search" in goal.lower():
-            has_navigated = any(s.action == "goto" for s in history)
-            has_typed = any(s.action == "type" for s in history)
-            has_clicked_search = any(
-                s.action == "click" and "搜索" in s.reasoning 
-                for s in history
-            )
-            
-            if has_navigated and has_typed and has_clicked_search:
-                # 检查是否在搜索结果页面
-                url = observation.get("url", "")
-                if "search" in url or "query" in url or "result" in observation.get("title", "").lower():
-                    return {
-                        "is_complete": True,
-                        "reason": "搜索任务已完成，已在搜索结果页面"
-                    }
-        
-        return {"is_complete": False, "reason": ""}
-    
-    def _rule_based_reasoning(
-        self,
-        goal: str,
-        observation: Dict[str, Any],
-        history: List[StepRecord]
-    ) -> Optional[Dict[str, Any]]:
-        """基于规则的推理"""
-        
-        url = observation.get("url", "")
-        title = observation.get("title", "")
-        elements = observation.get("elements", [])
-        history_actions = [s.action for s in history]
-        
-        # 规则1: 如果是空白页或about:blank，或者当前页面与目标不匹配，需要导航
-        target_url = self._infer_url_from_goal(goal)
-        
-        # 检查是否需要导航：空白页 或 URL不匹配
-        need_navigation = (
-            not url or 
-            url in ["about:blank", ""] or
-            (target_url not in url and url not in target_url)
-        )
-        
-        if need_navigation and "goto" not in history_actions:
-            return {
-                "reasoning": f"需要导航到目标网站: {target_url}",
-                "action": "goto",
-                "action_params": {"url": target_url},
-                "is_complete": False
-            }
-        
-        # 规则2: 如果目标是搜索，且还没有输入搜索词
-        if ("搜索" in goal or "search" in goal.lower()) and "type" not in history_actions:
-            # 提取搜索关键词
-            import re
-            keywords = re.findall(r'搜索\s*["\']?([^"\']+)["\']?', goal)
-            if not keywords:
-                keywords = re.findall(r'search\s+(?:for\s+)?["\']?([^"\']+)["\']?', goal, re.I)
-            
-            keyword = keywords[0] if keywords else goal.replace("搜索", "").strip()
-            
-            return {
-                "reasoning": f"需要搜索 '{keyword}'，在搜索框中输入关键词",
-                "action": "type",
-                "action_params": {
-                    "selector": "#kw",  # 百度搜索框
-                    "text": keyword,
-                    "force": True
-                },
-                "is_complete": False
-            }
-        
-        # 规则3: 如果已经输入了搜索词，还没有点击搜索
-        if ("搜索" in goal or "search" in goal.lower()) and "type" in history_actions and "click" not in history_actions:
-            return {
-                "reasoning": "已输入搜索词，需要点击搜索按钮",
-                "action": "click",
-                "action_params": {
-                    "selector": "#su",  # 百度搜索按钮
-                    "force": True
-                },
-                "is_complete": False
-            }
-        
-        # 规则4: 如果在搜索结果页面，需要提取数据
-        if ("提取" in goal or "extract" in goal.lower() or "获取" in goal) and "extract" not in history_actions:
-            # 判断提取什么
-            if "价格" in goal or "price" in goal.lower():
-                selector = ".price"  # 假设价格选择器
-            elif "标题" in goal or "title" in goal.lower():
-                selector = "h1, h2, h3"
-            else:
-                selector = ".result"  # 默认搜索结果
-            
-            return {
-                "reasoning": f"需要提取页面数据，使用选择器: {selector}",
-                "action": "extract",
-                "action_params": {
-                    "selector": selector,
-                    "fields": {"text": "string"},
-                    "multiple": True
-                },
-                "is_complete": False
-            }
-        
-        # 规则5: 如果页面加载慢，等待一下
-        if observation.get("element_count", 0) == 0:
-            return {
-                "reasoning": "页面元素较少，可能需要等待加载",
-                "action": "wait",
-                "action_params": {"timeout": 2000},
-                "is_complete": False
-            }
-        
+    @property
+    def duration_ms(self) -> Optional[float]:
+        """执行耗时（毫秒）"""
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at) * 1000
         return None
     
-    async def _llm_reasoning(
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            "task_id": self.task_id,
+            "name": self.name,
+            "agent_id": self.agent_id,
+            "capability": self.capability,
+            "state": self.state.value,
+            "depends_on": list(self.depends_on),
+            "result": self.result,
+            "error": self.error,
+            "duration_ms": self.duration_ms,
+        }
+
+
+@dataclass
+class TaskGraph:
+    """
+    任务依赖图
+    
+    定义多个任务之间的依赖关系，形成 DAG（有向无环图）。
+    
+    使用示例：
+    ```python
+    graph = TaskGraph()
+    
+    # 添加任务
+    task1 = graph.add_task(
+        name="search",
+        agent_id="search-agent",
+        capability="web_search",
+        input_data={"query": "AI news"}
+    )
+    
+    task2 = graph.add_task(
+        name="summarize",
+        agent_id="llm-agent",
+        capability="summarize",
+        depends_on={task1.task_id}  # 依赖 task1
+    )
+    
+    # 验证图
+    if graph.validate():
+        plan = graph.get_execution_plan()
+    ```
+    """
+    graph_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
+    name: str = ""
+    description: str = ""
+    
+    # 任务节点
+    tasks: Dict[str, TaskNode] = field(default_factory=dict)
+    
+    # 配置
+    fail_fast: bool = True    # 遇到失败立即停止
+    max_parallel: int = 10    # 最大并行数
+    
+    def add_task(
         self,
-        goal: str,
-        observation: Dict[str, Any],
-        history: List[StepRecord],
-        remaining_steps: int
-    ) -> Dict[str, Any]:
+        name: str,
+        agent_id: str,
+        capability: str,
+        input_data: Optional[Dict[str, Any]] = None,
+        depends_on: Optional[Set[str]] = None,
+        timeout: float = 60.0,
+        retry_count: int = 0,
+    ) -> TaskNode:
         """
-        使用LLM进行推理
-
-        通过共享的LLM提供者进行智能推理。
-        """
-        if not self.llm_provider:
-            return {
-                "reasoning": "LLM provider not configured",
-                "action": "unknown",
-                "action_params": {},
-                "is_complete": False
-            }
-
-        try:
-            # 构建提示词
-            history_summary = []
-            for step in history[-5:]:  # 最近5步
-                history_summary.append(f"- Step {step.step_number}: {step.action} - {'success' if step.success else 'failed'}")
-
-            prompt = f"""作为浏览器自动化助手，根据当前状态决定下一步行动。
-
-目标: {goal}
-
-当前页面:
-- URL: {observation.get('url', 'unknown')}
-- Title: {observation.get('title', 'unknown')}
-- 可交互元素: {observation.get('element_count', 0)} 个
-
-最近执行历史:
-{chr(10).join(history_summary) if history_summary else '无'}
-
-剩余步数: {remaining_steps}
-
-可用操作: goto, click, type, extract, scroll, wait
-
-请分析并返回JSON格式:
-{{
-    "reasoning": "为什么执行这个行动",
-    "action": "操作名",
-    "action_params": {{
-        "selector": "CSS选择器或目标",
-        "value": "值(如果需要)"
-    }},
-    "is_complete": true/false
-}}
-
-只返回JSON，不要其他解释。"""
-
-            # 调用共享LLM
-            response = await self.llm_provider.complete(
-                prompt=prompt,
-                temperature=0.3,
-                max_tokens=400
-            )
-
-            # 解析JSON
-            import json
-            try:
-                data = json.loads(response)
-                return {
-                    "reasoning": data.get("reasoning", "LLM推理"),
-                    "action": data.get("action", "unknown"),
-                    "action_params": data.get("action_params", {}),
-                    "is_complete": data.get("is_complete", False)
-                }
-            except json.JSONDecodeError:
-                logger.error(f"LLM响应JSON解析失败: {response[:200]}")
-                return {
-                    "reasoning": "LLM响应格式错误",
-                    "action": "unknown",
-                    "action_params": {},
-                    "is_complete": False
-                }
-
-        except Exception as e:
-            logger.error(f"LLM推理失败: {e}")
-            return {
-                "reasoning": f"LLM调用失败: {e}",
-                "action": "unknown",
-                "action_params": {},
-                "is_complete": False
-            }
-
-
-class ActionExecutor:
-    """
-    行动执行器 - 负责 Action 阶段
-    
-    执行具体的浏览器操作。
-    """
-    
-    def __init__(self, adapter: ChromeAdapter, intent_engine: IntentEngine):
-        self.adapter = adapter
-        self.intent_engine = intent_engine
-    
-    async def execute(self, action: str, params: Dict) -> Dict[str, Any]:
-        """
-        执行行动
+        添加任务节点
         
         Args:
-            action: 行动类型
-            params: 行动参数
+            name: 任务名称
+            agent_id: 目标 Agent ID
+            capability: 能力名称
+            input_data: 输入数据
+            depends_on: 依赖的任务 ID 集合
+            timeout: 超时秒数
+            retry_count: 重试次数
+            
+        Returns:
+            TaskNode
+        """
+        task_id = f"{self.graph_id}-{len(self.tasks):03d}"
+        
+        task = TaskNode(
+            task_id=task_id,
+            name=name,
+            agent_id=agent_id,
+            capability=capability,
+            input_data=input_data or {},
+            depends_on=depends_on or set(),
+            timeout=timeout,
+            retry_count=retry_count,
+        )
+        
+        self.tasks[task_id] = task
+        return task
+    
+    def remove_task(self, task_id: str) -> bool:
+        """移除任务"""
+        if task_id in self.tasks:
+            # 同时移除其他任务对它的依赖
+            for task in self.tasks.values():
+                task.depends_on.discard(task_id)
+            del self.tasks[task_id]
+            return True
+        return False
+    
+    def add_dependency(self, task_id: str, depends_on: str) -> bool:
+        """添加依赖关系"""
+        if task_id in self.tasks and depends_on in self.tasks:
+            self.tasks[task_id].depends_on.add(depends_on)
+            return True
+        return False
+    
+    def get_task(self, task_id: str) -> Optional[TaskNode]:
+        """获取任务"""
+        return self.tasks.get(task_id)
+    
+    def get_root_tasks(self) -> List[TaskNode]:
+        """获取根任务（无依赖）"""
+        return [t for t in self.tasks.values() if not t.depends_on]
+    
+    def get_ready_tasks(self) -> List[TaskNode]:
+        """获取就绪任务（依赖已完成）"""
+        ready = []
+        for task in self.tasks.values():
+            if task.state != TaskState.PENDING:
+                continue
+            
+            # 检查所有依赖是否完成
+            deps_satisfied = all(
+                self.tasks[dep].state == TaskState.COMPLETED
+                for dep in task.depends_on
+                if dep in self.tasks
+            )
+            
+            if deps_satisfied:
+                ready.append(task)
+        
+        return ready
+    
+    def get_downstream_tasks(self, task_id: str) -> List[TaskNode]:
+        """获取下游任务（依赖此任务的）"""
+        return [
+            t for t in self.tasks.values()
+            if task_id in t.depends_on
+        ]
+    
+    def validate(self) -> Tuple[bool, List[str]]:
+        """
+        验证任务图
+        
+        检查：
+        - 依赖引用有效
+        - 无循环依赖
         
         Returns:
-            执行结果
+            (是否有效, 错误列表)
         """
-        try:
-            if action == "complete":
-                return {"success": True, "data": None}
+        errors = []
+        
+        # 检查依赖引用
+        for task in self.tasks.values():
+            for dep in task.depends_on:
+                if dep not in self.tasks:
+                    errors.append(f"Task {task.task_id} depends on non-existent task {dep}")
+        
+        # 检查循环依赖
+        visited = set()
+        rec_stack = set()
+        
+        def has_cycle(task_id: str) -> bool:
+            visited.add(task_id)
+            rec_stack.add(task_id)
             
-            elif action == "unknown":
-                return {"success": False, "error": "Unknown action"}
+            for dep in self.tasks[task_id].depends_on:
+                if dep not in self.tasks:
+                    continue  # 跳过不存在的依赖（已在前面报错）
+                if dep not in visited:
+                    if has_cycle(dep):
+                        return True
+                elif dep in rec_stack:
+                    return True
             
-            elif action == "goto":
-                # goto 操作特殊处理 - 支持 url 参数
-                url = params.get("url") or params.get("target", {}).get("url")
-                if not url:
-                    return {"success": False, "error": "goto 操作需要提供 url"}
-                result = await self.adapter.execute(
-                    "goto",
-                    target={"url": url},
-                    options=params.get("options", {})
-                )
-                return result
+            rec_stack.remove(task_id)
+            return False
+        
+        for task_id in self.tasks:
+            if task_id not in visited:
+                if has_cycle(task_id):
+                    errors.append("Circular dependency detected")
+                    break
+        
+        return len(errors) == 0, errors
+    
+    def get_execution_layers(self) -> List[List[TaskNode]]:
+        """
+        获取执行层次
+        
+        将任务按依赖关系分层，同一层的任务可并行执行。
+        
+        Returns:
+            任务层次列表
+        """
+        layers = []
+        remaining = set(self.tasks.keys())
+        completed = set()
+        
+        while remaining:
+            # 找出当前可执行的任务（依赖都已在 completed 中）
+            layer = []
+            for task_id in list(remaining):
+                task = self.tasks[task_id]
+                if task.depends_on.issubset(completed):
+                    layer.append(task)
+                    remaining.remove(task_id)
             
-            elif action in ["click", "type", "extract", "scroll", "wait", "screenshot"]:
-                # 其他标准操作
-                result = await self.adapter.execute(
-                    action,
-                    target=params.get("target") or ({"css": params["selector"]} if "selector" in params else None),
-                    value=params.get("text") or params.get("value"),
-                    options=params.get("options", {})
-                )
-                return result
+            if not layer:
+                # 无法继续（存在循环依赖）
+                break
             
-            elif action == "intent":
-                # 使用意图引擎执行
-                intent_text = params.get("intent")
-                result = await self.intent_engine.execute(intent_text, {})
-                return result
-            
-            else:
-                return {"success": False, "error": f"Unknown action: {action}"}
-                
-        except Exception as e:
-            logger.error(f"Action execution failed: {e}")
-            return {"success": False, "error": str(e)}
+            layers.append(layer)
+            completed.update(t.task_id for t in layer)
+        
+        return layers
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            "graph_id": self.graph_id,
+            "name": self.name,
+            "tasks": {tid: t.to_dict() for tid, t in self.tasks.items()},
+            "fail_fast": self.fail_fast,
+            "max_parallel": self.max_parallel,
+        }
+
+
+@dataclass
+class ExecutionResult:
+    """执行结果"""
+    graph_id: str
+    success: bool
+    
+    # 统计
+    total_tasks: int = 0
+    completed_tasks: int = 0
+    failed_tasks: int = 0
+    skipped_tasks: int = 0
+    
+    # 耗时
+    start_time: float = 0.0
+    end_time: float = 0.0
+    
+    # 任务结果
+    task_results: Dict[str, Any] = field(default_factory=dict)
+    
+    # 错误信息
+    errors: List[str] = field(default_factory=list)
+    
+    @property
+    def duration_ms(self) -> float:
+        """总耗时（毫秒）"""
+        return (self.end_time - self.start_time) * 1000
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            "graph_id": self.graph_id,
+            "success": self.success,
+            "total_tasks": self.total_tasks,
+            "completed_tasks": self.completed_tasks,
+            "failed_tasks": self.failed_tasks,
+            "skipped_tasks": self.skipped_tasks,
+            "duration_ms": self.duration_ms,
+            "task_results": self.task_results,
+            "errors": self.errors,
+        }
 
 
 class Orchestrator:
     """
-    编排器 - O-R-A 循环的主控制器
+    多 Agent 编排器
     
-    协调 Observation、Reasoning、Action 三个阶段，
-    完成复杂任务的自主执行。
+    调度和执行多 Agent 协作任务。
+    
+    使用示例：
+    ```python
+    from aibridge.gateway.protocol_bridge import ProtocolBridge
+    
+    bridge = ProtocolBridge(mcp_registry, a2a_gateway)
+    orchestrator = Orchestrator(bridge)
+    
+    # 创建任务图
+    graph = TaskGraph(name="research-workflow")
+    
+    t1 = graph.add_task(
+        name="search",
+        agent_id="search-agent",
+        capability="web_search",
+        input_data={"query": "AI trends 2025"}
+    )
+    
+    t2 = graph.add_task(
+        name="analyze",
+        agent_id="analyzer-agent",
+        capability="analyze",
+        depends_on={t1.task_id},
+        input_data={"use_result_from": t1.task_id}
+    )
+    
+    t3 = graph.add_task(
+        name="report",
+        agent_id="writer-agent",
+        capability="generate_report",
+        depends_on={t2.task_id}
+    )
+    
+    # 执行
+    result = await orchestrator.execute(graph)
+    print(f"Completed: {result.completed_tasks}/{result.total_tasks}")
+    ```
     """
     
     def __init__(
         self,
-        adapter: ChromeAdapter,
-        intent_engine: IntentEngine,
-        max_steps: int = 10,
-        use_llm: bool = False
+        bridge: "ProtocolBridge",
+        tracer: Optional["Tracer"] = None,
+        default_timeout: float = 60.0,
+        max_retries: int = 3,
     ):
-        self.adapter = adapter
-        self.intent_engine = intent_engine
-        self.max_steps = max_steps
-        self.use_llm = use_llm
+        self._bridge = bridge
+        self._tracer = tracer
+        self._default_timeout = default_timeout
+        self._max_retries = max_retries
         
-        # 初始化各组件
-        self.observer = PageObserver(adapter)
-        self.reasoning_engine = ReasoningEngine(adapter, use_llm)
-        self.action_executor = ActionExecutor(adapter, intent_engine)
+        # 运行中的图
+        self._running_graphs: Dict[str, TaskGraph] = {}
         
-        # 回调函数
-        self.on_step: Optional[Callable[[StepRecord], None]] = None
-        self.on_complete: Optional[Callable[[TaskResult], None]] = None
-    
-    async def execute_task(
-        self,
-        goal: str,
-        max_steps: Optional[int] = None,
-        callback_url: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        执行复杂任务
-        
-        Args:
-            goal: 任务目标描述
-            max_steps: 最大执行步数
-            callback_url: 可选的回调URL
-        
-        Returns:
-            任务执行结果
-        """
-        import time
-        start_time = time.time()
-        
-        max_steps = max_steps or self.max_steps
-        history: List[StepRecord] = []
-        
-        logger.info(f"Starting O-R-A task: {goal}")
-        logger.info(f"Max steps: {max_steps}")
-        
-        # O-R-A 循环防死循环保护
-        visited_states = set()  # 记录已访问状态
-        consecutive_same_state = 0  # 连续相同状态计数
-        
-        for step_num in range(1, max_steps + 1):
-            logger.info(f"\n--- Step {step_num}/{max_steps} ---")
-            
-            # 检查 adapter 是否仍然连接
-            if not self.adapter or not self.adapter.is_connected:
-                logger.error("Adapter disconnected during task execution")
-                return {
-                    "success": False,
-                    "status": TaskStatus.FAILED,
-                    "steps_taken": step_num - 1,
-                    "error": "Browser adapter disconnected"
-                }
-            
-            # 检查是否被外部取消
-            if hasattr(self, '_cancelled') and self._cancelled:
-                logger.info("Task was cancelled")
-                return {
-                    "success": False,
-                    "status": TaskStatus.CANCELLED,
-                    "steps_taken": step_num - 1,
-                    "error": "Task was cancelled by user"
-                }
-            
-            # ========== Observation ==========
-            logger.info("[Observation] Observing current state...")
-            observation = await self.observer.observe(include_screenshot=True)
-            
-            # ========== Reasoning ==========
-            logger.info("[Reasoning] Deciding next action...")
-            reasoning_result = await self.reasoning_engine.reason(
-                goal=goal,
-                observation=observation,
-                history=history,
-                remaining_steps=max_steps - step_num
-            )
-            
-            # 检查是否完成
-            if reasoning_result.get("is_complete"):
-                logger.info("[Reasoning] Task completed!")
-                break
-            
-            action = reasoning_result.get("action")
-            action_params = reasoning_result.get("action_params", {})
-            reasoning_text = reasoning_result.get("reasoning", "")
-            
-            logger.info(f"[Reasoning] Plan: {reasoning_text}")
-            logger.info(f"[Reasoning] Action: {action}")
-            
-            # ========== Action ==========
-            logger.info(f"[Action] Executing: {action}")
-            action_result = await self.action_executor.execute(action, action_params)
-            
-            # 记录步骤
-            step_record = StepRecord(
-                step_number=step_num,
-                timestamp=datetime.now(),
-                observation=observation,
-                reasoning=reasoning_text,
-                action=action,
-                action_params=action_params,
-                success=action_result.get("success", False),
-                result_data=action_result.get("data"),
-                error=action_result.get("error"),
-                screenshot_b64=observation.get("screenshot_b64")
-            )
-            history.append(step_record)
-            
-            # 防死循环检测：检查是否重复相同的状态
-            state_key = f"{observation.get('url')}:{action}:{hash(str(action_params))}"
-            if state_key in visited_states:
-                consecutive_same_state += 1
-                if consecutive_same_state >= 3:
-                    logger.error(f"检测到死循环：连续 {consecutive_same_state} 次相同状态")
-                    return {
-                        "success": False,
-                        "status": TaskStatus.FAILED,
-                        "steps_taken": step_num,
-                        "error": "Detected infinite loop: repeating same state",
-                        "history": history
-                    }
-            else:
-                consecutive_same_state = 0
-                visited_states.add(state_key)
-            
-            # 防死循环：限制状态历史大小
-            if len(visited_states) > max_steps * 2:
-                visited_states.clear()
-            
-            # 触发回调
-            if self.on_step:
-                await self._async_callback(self.on_step, step_record)
-            
-            logger.info(f"[Action] Result: {action_result.get('success')}")
-            
-            # 如果行动失败，尝试恢复
-            if not action_result.get("success"):
-                logger.warning(f"Action failed: {action_result.get('error')}")
-                # 简单恢复：等待一下继续
-                await asyncio.sleep(1)
-        
-        # 构建最终结果
-        duration = time.time() - start_time
-        
-        # 判断任务是否成功
-        last_step = history[-1] if history else None
-        success = last_step is not None and (
-            last_step.action == "complete" or 
-            (last_step.action == "extract" and last_step.success and last_step.result_data)
-        )
-        
-        result = TaskResult(
-            success=success,
-            goal=goal,
-            status=TaskStatus.COMPLETED if success else TaskStatus.FAILED,
-            steps=history,
-            data=last_step.result_data if last_step else None,
-            summary=f"任务{'完成' if success else '失败'}，共执行{len(history)}步，耗时{duration:.1f}秒",
-            total_steps=len(history),
-            duration_seconds=duration
-        )
-        
-        # 触发完成回调
-        if self.on_complete:
-            await self._async_callback(self.on_complete, result)
-        
-        logger.info(f"\nTask finished: {result.summary}")
-        
-        return {
-            "success": result.success,
-            "goal": result.goal,
-            "status": result.status.value,
-            "steps": [
-                {
-                    "step": s.step_number,
-                    "action": s.action,
-                    "reasoning": s.reasoning,
-                    "success": s.success,
-                    "data": s.result_data
-                }
-                for s in history
-            ],
-            "data": result.data,
-            "summary": result.summary,
-            "total_steps": result.total_steps,
-            "duration": result.duration_seconds
+        # 统计
+        self._stats = {
+            "executions": 0,
+            "successful": 0,
+            "failed": 0,
+            "total_tasks": 0,
         }
     
-    async def _async_callback(self, callback: Callable, data: Any):
-        """异步执行回调"""
+    async def execute(
+        self,
+        graph: TaskGraph,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> ExecutionResult:
+        """
+        执行任务图
+        
+        Args:
+            graph: 任务图
+            context: 执行上下文（可在任务间共享）
+            
+        Returns:
+            ExecutionResult
+        """
+        self._stats["executions"] += 1
+        start_time = time.time()
+        
+        # 验证图
+        valid, errors = graph.validate()
+        if not valid:
+            return ExecutionResult(
+                graph_id=graph.graph_id,
+                success=False,
+                errors=errors,
+                start_time=start_time,
+                end_time=time.time(),
+            )
+        
+        # 初始化上下文
+        context = context or {}
+        context["_results"] = {}  # 存储任务结果
+        
+        # 标记运行中
+        self._running_graphs[graph.graph_id] = graph
+        
         try:
-            if asyncio.iscoroutinefunction(callback):
-                await callback(data)
+            # 按层执行
+            layers = graph.get_execution_layers()
+            
+            for layer in layers:
+                # 检查是否需要提前终止
+                if graph.fail_fast:
+                    failed = [t for t in graph.tasks.values() if t.state == TaskState.FAILED]
+                    if failed:
+                        # 将剩余任务标记为跳过
+                        for task in graph.tasks.values():
+                            if task.state == TaskState.PENDING:
+                                task.state = TaskState.SKIPPED
+                        break
+                
+                # 并行执行当前层
+                await self._execute_layer(layer, context, graph.max_parallel)
+            
+            # 统计结果
+            completed = sum(1 for t in graph.tasks.values() if t.state == TaskState.COMPLETED)
+            failed = sum(1 for t in graph.tasks.values() if t.state == TaskState.FAILED)
+            skipped = sum(1 for t in graph.tasks.values() if t.state == TaskState.SKIPPED)
+            
+            success = failed == 0 and skipped == 0
+            
+            if success:
+                self._stats["successful"] += 1
             else:
-                callback(data)
-        except Exception as e:
-            logger.error(f"Callback error: {e}")
+                self._stats["failed"] += 1
+            
+            self._stats["total_tasks"] += len(graph.tasks)
+            
+            return ExecutionResult(
+                graph_id=graph.graph_id,
+                success=success,
+                total_tasks=len(graph.tasks),
+                completed_tasks=completed,
+                failed_tasks=failed,
+                skipped_tasks=skipped,
+                start_time=start_time,
+                end_time=time.time(),
+                task_results=context["_results"],
+                errors=[t.error for t in graph.tasks.values() if t.error],
+            )
+            
+        finally:
+            del self._running_graphs[graph.graph_id]
+    
+    async def _execute_layer(
+        self,
+        tasks: List[TaskNode],
+        context: Dict[str, Any],
+        max_parallel: int,
+    ) -> None:
+        """执行一层任务"""
+        # 限制并行数
+        semaphore = asyncio.Semaphore(max_parallel)
+        
+        async def run_with_semaphore(task: TaskNode):
+            async with semaphore:
+                await self._execute_task(task, context)
+        
+        await asyncio.gather(*[run_with_semaphore(t) for t in tasks])
+    
+    async def _execute_task(
+        self,
+        task: TaskNode,
+        context: Dict[str, Any],
+    ) -> None:
+        """执行单个任务"""
+        task.state = TaskState.RUNNING
+        task.started_at = time.time()
+        
+        # 准备输入数据
+        input_data = self._prepare_input(task, context)
+        
+        # 重试逻辑
+        retries = 0
+        max_retries = task.retry_count or self._max_retries
+        
+        while retries <= max_retries:
+            try:
+                # 执行任务
+                result = await asyncio.wait_for(
+                    self._call_agent(task.agent_id, task.capability, input_data),
+                    timeout=task.timeout or self._default_timeout,
+                )
+                
+                # 成功
+                task.state = TaskState.COMPLETED
+                task.result = result
+                task.completed_at = time.time()
+                
+                # 存储结果到上下文
+                context["_results"][task.task_id] = result
+                
+                logger.info(f"Task {task.task_id} ({task.name}) completed in {task.duration_ms:.2f}ms")
+                return
+                
+            except asyncio.TimeoutError:
+                task.error = f"Timeout after {task.timeout}s"
+                retries += 1
+                
+            except Exception as e:
+                task.error = str(e)
+                retries += 1
+                
+                if retries <= max_retries:
+                    logger.warning(f"Task {task.task_id} failed, retrying ({retries}/{max_retries}): {e}")
+                    await asyncio.sleep(task.retry_delay)
+        
+        # 所有重试失败
+        task.state = TaskState.FAILED
+        task.completed_at = time.time()
+        logger.error(f"Task {task.task_id} ({task.name}) failed: {task.error}")
+    
+    def _prepare_input(
+        self,
+        task: TaskNode,
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        准备任务输入
+        
+        支持从上下文注入前置任务的结果。
+        """
+        input_data = dict(task.input_data)
+        
+        # 检查是否有结果引用
+        if "use_result_from" in input_data:
+            ref_task_id = input_data.pop("use_result_from")
+            if ref_task_id in context["_results"]:
+                input_data["previous_result"] = context["_results"][ref_task_id]
+        
+        # 注入所有依赖任务的结果
+        for dep_id in task.depends_on:
+            if dep_id in context["_results"]:
+                input_data[f"dep_{dep_id}"] = context["_results"][dep_id]
+        
+        return input_data
+    
+    async def _call_agent(
+        self,
+        agent_id: str,
+        capability: str,
+        input_data: Dict[str, Any],
+    ) -> Any:
+        """调用 Agent"""
+        from ..gateway.a2a_gateway import A2ATask
+        
+        task = A2ATask(
+            from_agent="orchestrator",
+            to_agent=agent_id,
+            capability=capability,
+            input_data=input_data,
+        )
+        
+        return await self._bridge.execute_task(task)
+    
+    async def cancel(self, graph_id: str) -> bool:
+        """
+        取消执行中的图
+        
+        Args:
+            graph_id: 图 ID
+            
+        Returns:
+            是否成功取消
+        """
+        if graph_id not in self._running_graphs:
+            return False
+        
+        graph = self._running_graphs[graph_id]
+        
+        # 将所有未完成任务标记为取消
+        for task in graph.tasks.values():
+            if task.state in (TaskState.PENDING, TaskState.READY, TaskState.RUNNING):
+                task.state = TaskState.CANCELLED
+        
+        logger.info(f"Graph {graph_id} cancelled")
+        return True
+    
+    def get_running_graphs(self) -> List[str]:
+        """获取运行中的图 ID"""
+        return list(self._running_graphs.keys())
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """获取统计信息"""
+        return {
+            **self._stats,
+            "running_graphs": len(self._running_graphs),
+        }
 
 
-# ============ 使用示例 ============
+# ===== 便捷函数 =====
 
-async def demo():
-    """演示 O-R-A 循环"""
-    from aibridge.adapters.browser.chrome import ChromeAdapter
-    from aibridge.core.intent_engine import IntentEngine
+def create_sequential_graph(
+    name: str,
+    tasks: List[Dict[str, Any]],
+) -> TaskGraph:
+    """
+    创建顺序执行的任务图
     
-    # 创建组件
-    adapter = ChromeAdapter()
-    await adapter.connect()
+    Args:
+        name: 图名称
+        tasks: 任务列表 [{"name", "agent_id", "capability", "input_data"}, ...]
+        
+    Returns:
+        TaskGraph
+    """
+    graph = TaskGraph(name=name)
+    prev_id = None
     
-    intent_engine = IntentEngine(adapter)
-    await intent_engine.initialize()
+    for task_def in tasks:
+        depends = {prev_id} if prev_id else set()
+        task = graph.add_task(
+            name=task_def["name"],
+            agent_id=task_def["agent_id"],
+            capability=task_def["capability"],
+            input_data=task_def.get("input_data", {}),
+            depends_on=depends,
+            timeout=task_def.get("timeout", 60.0),
+        )
+        prev_id = task.task_id
     
-    orchestrator = Orchestrator(adapter, intent_engine, max_steps=5)
-    
-    # 设置回调
-    def on_step(step: StepRecord):
-        print(f"  Step {step.step_number}: {step.action} - {'✅' if step.success else '❌'}")
-    
-    def on_complete(result: TaskResult):
-        print(f"\n✨ Task {'completed' if result.success else 'failed'}!")
-    
-    orchestrator.on_step = on_step
-    orchestrator.on_complete = on_complete
-    
-    # 执行任务
-    print("\n" + "="*60)
-    print("🤖 O-R-A 循环演示")
-    print("="*60)
-    
-    goal = "在百度上搜索 'iPhone 15'"
-    print(f"\n📝 Goal: {goal}\n")
-    
-    result = await orchestrator.execute_task(goal, max_steps=5)
-    
-    print(f"\n📊 Result: {result['summary']}")
-    print(f"📈 Data: {result['data']}")
-    
-    await adapter.disconnect()
+    return graph
 
 
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(demo())
+def create_parallel_graph(
+    name: str,
+    tasks: List[Dict[str, Any]],
+    aggregator: Optional[Dict[str, Any]] = None,
+) -> TaskGraph:
+    """
+    创建并行执行的任务图
+    
+    Args:
+        name: 图名称
+        tasks: 并行任务列表
+        aggregator: 可选的聚合任务
+        
+    Returns:
+        TaskGraph
+    """
+    graph = TaskGraph(name=name)
+    task_ids = []
+    
+    # 添加并行任务
+    for task_def in tasks:
+        task = graph.add_task(
+            name=task_def["name"],
+            agent_id=task_def["agent_id"],
+            capability=task_def["capability"],
+            input_data=task_def.get("input_data", {}),
+            timeout=task_def.get("timeout", 60.0),
+        )
+        task_ids.append(task.task_id)
+    
+    # 添加聚合任务
+    if aggregator:
+        graph.add_task(
+            name=aggregator["name"],
+            agent_id=aggregator["agent_id"],
+            capability=aggregator["capability"],
+            input_data=aggregator.get("input_data", {}),
+            depends_on=set(task_ids),
+            timeout=aggregator.get("timeout", 60.0),
+        )
+    
+    return graph
+
+
+def create_fan_out_fan_in_graph(
+    name: str,
+    splitter: Dict[str, Any],
+    workers: List[Dict[str, Any]],
+    merger: Dict[str, Any],
+) -> TaskGraph:
+    """
+    创建扇出-扇入模式的任务图
+    
+    ```
+           ┌─> Worker1 ─┐
+    Split ─┼─> Worker2 ─┼─> Merge
+           └─> Worker3 ─┘
+    ```
+    
+    Args:
+        name: 图名称
+        splitter: 分割任务
+        workers: 工作任务列表
+        merger: 合并任务
+        
+    Returns:
+        TaskGraph
+    """
+    graph = TaskGraph(name=name)
+    
+    # 分割任务
+    split_task = graph.add_task(
+        name=splitter["name"],
+        agent_id=splitter["agent_id"],
+        capability=splitter["capability"],
+        input_data=splitter.get("input_data", {}),
+    )
+    
+    # 工作任务
+    worker_ids = []
+    for worker_def in workers:
+        worker = graph.add_task(
+            name=worker_def["name"],
+            agent_id=worker_def["agent_id"],
+            capability=worker_def["capability"],
+            input_data=worker_def.get("input_data", {}),
+            depends_on={split_task.task_id},
+        )
+        worker_ids.append(worker.task_id)
+    
+    # 合并任务
+    graph.add_task(
+        name=merger["name"],
+        agent_id=merger["agent_id"],
+        capability=merger["capability"],
+        input_data=merger.get("input_data", {}),
+        depends_on=set(worker_ids),
+    )
+    
+    return graph
+
+
+# ===== 向后兼容别名 =====
+
+# v3.x 兼容：TaskStatus -> TaskState
+TaskStatus = TaskState
+
+# v3.x 兼容：TaskResult -> ExecutionResult
+TaskResult = ExecutionResult

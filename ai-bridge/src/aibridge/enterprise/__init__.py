@@ -10,6 +10,7 @@
 - health: 健康检查
 - policy: 工具级权限策略 (PBAC)
 - metering: 调用成本计量
+- tracing: 分布式链路追踪
 """
 
 from .auth import (
@@ -66,6 +67,23 @@ from .metering import (
     get_builtin_quota,
     list_builtin_quotas,
 )
+from .tracing import (
+    Tracer,
+    TracerConfig,
+    Span,
+    SpanContext,
+    SpanKind,
+    SpanStatus,
+    SpanEvent,
+    SpanLink,
+    SpanExporter,
+    ConsoleExporter,
+    InMemoryExporter,
+    OTLPExporter,
+    TracingMiddleware,
+    get_tracer,
+    set_tracer,
+)
 
 __all__ = [
     # Auth
@@ -116,4 +134,20 @@ __all__ = [
     "BUILTIN_QUOTAS",
     "get_builtin_quota",
     "list_builtin_quotas",
+    # Tracing (v4.0)
+    "Tracer",
+    "TracerConfig",
+    "Span",
+    "SpanContext",
+    "SpanKind",
+    "SpanStatus",
+    "SpanEvent",
+    "SpanLink",
+    "SpanExporter",
+    "ConsoleExporter",
+    "InMemoryExporter",
+    "OTLPExporter",
+    "TracingMiddleware",
+    "get_tracer",
+    "set_tracer",
 ]

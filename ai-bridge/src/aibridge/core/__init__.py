@@ -4,7 +4,22 @@ AI-Bridge Core - 核心功能模块
 
 # 意图识别和 O-R-A 循环
 from .intent_engine import IntentEngine, IntentType, IntentResult, ActionStep
-from .orchestrator import Orchestrator, TaskResult, TaskStatus
+
+# 多 Agent 编排器 (v4.0 增强)
+from .orchestrator import (
+    Orchestrator,
+    TaskGraph,
+    TaskNode,
+    TaskState,
+    ExecutionResult,
+    # 向后兼容别名
+    TaskResult,
+    TaskStatus,
+    # 便捷函数
+    create_sequential_graph,
+    create_parallel_graph,
+    create_fan_out_fan_in_graph,
+)
 
 # 会话持久化
 from .session_manager import SessionManager, SessionData
@@ -36,14 +51,22 @@ from .llm_provider import (
 )
 
 __all__ = [
-    # 意图和编排
+    # 意图识别
     "IntentEngine",
     "IntentType",
     "IntentResult",
     "ActionStep",
+    # 多 Agent 编排 (v4.0)
     "Orchestrator",
-    "TaskResult",
-    "TaskStatus",
+    "TaskGraph",
+    "TaskNode",
+    "TaskState",
+    "ExecutionResult",
+    "TaskResult",     # 向后兼容
+    "TaskStatus",     # 向后兼容
+    "create_sequential_graph",
+    "create_parallel_graph",
+    "create_fan_out_fan_in_graph",
     # 会话管理
     "SessionManager",
     "SessionData",
