@@ -9,8 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from aibridge.core.protocol import Target, Request, Response
 from aibridge.adapters.base import AdapterType, AdapterInfo
 from aibridge.core.adapter_config import (
-    ChromeConfig, SlackConfig, FeishuConfig,
-    OfficeConfig, DesktopConfig, create_config,
+    ChromeConfig, OfficeConfig, create_config,
 )
 
 
@@ -30,15 +29,14 @@ class TestConfigurationIntegration:
         assert config.cdp_url == "http://localhost:9999"
         assert config.headless is True
     
-    def test_create_config_for_slack(self):
-        """测试创建 Slack 配置"""
-        config = create_config("slack", {
-            "bot_token": "xoxb-test",
-            "default_channel": "#general"
+    def test_create_config_for_office(self):
+        """测试创建 Office 配置"""
+        config = create_config("office", {
+            "visible": False
         })
         
-        assert isinstance(config, SlackConfig)
-        assert config.bot_token == "xoxb-test"
+        assert isinstance(config, OfficeConfig)
+        assert config.visible is False
     
     def test_create_config_unknown_adapter(self):
         """测试创建未知适配器配置"""
@@ -73,16 +71,16 @@ class TestConfigurationIntegration:
         """测试从环境变量创建配置"""
         import os
         
-        os.environ["SLACK_BOT_TOKEN"] = "env-token"
-        os.environ["SLACK_ENABLED"] = "false"
+        os.environ["CHROME_CDP_URL"] = "http://env:9222"
+        os.environ["CHROME_ENABLED"] = "false"
         
         try:
-            config = SlackConfig.from_env("SLACK")
-            assert config.bot_token == "env-token"
+            config = ChromeConfig.from_env("CHROME")
+            assert config.cdp_url == "http://env:9222"
             assert config.enabled is False
         finally:
-            del os.environ["SLACK_BOT_TOKEN"]
-            del os.environ["SLACK_ENABLED"]
+            del os.environ["CHROME_CDP_URL"]
+            del os.environ["CHROME_ENABLED"]
 
 
 # ============ Protocol Integration Tests ============
@@ -170,9 +168,8 @@ class TestAdapterInfo:
     def test_adapter_type_values(self):
         """测试适配器类型枚举值"""
         assert AdapterType.BROWSER.value == "browser"
-        assert AdapterType.IM.value == "im"
         assert AdapterType.OFFICE.value == "office"
-        assert AdapterType.DESKTOP.value == "desktop"
+        assert AdapterType.CUSTOM.value == "custom"
 
 
 # ============ Target Tests ============

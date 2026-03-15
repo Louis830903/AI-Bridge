@@ -15,28 +15,14 @@ from aibridge.core.logger import setup_logging, get_logger
 # Unified configuration system
 from aibridge.core.adapter_config import (
     ChromeConfig, EdgeConfig,
-    FeishuConfig, DingtalkConfig, WecomConfig,
-    SlackConfig, TeamsConfig, DiscordConfig, GoogleChatConfig,
-    TelegramConfig, WhatsAppConfig, MessengerConfig,
-    LINEConfig, ViberConfig, KakaoTalkConfig,
-    OfficeConfig, WPSConfig, DesktopConfig,
+    OfficeConfig, WPSConfig,
     create_config,
 )
 
 # Import all adapters
 from aibridge.adapters.browser import ChromeAdapter, EdgeAdapter
-from aibridge.adapters.im import (
-    # China IM
-    FeishuAdapter, DingtalkAdapter, WecomAdapter,
-    # Global IM - Enterprise
-    SlackAdapter, TeamsAdapter, DiscordAdapter, GoogleChatAdapter,
-    # Global IM - Consumer
-    TelegramAdapter, WhatsAppAdapter, MessengerAdapter,
-    LINEAdapter, ViberAdapter, KakaoTalkAdapter,
-)
 from aibridge.adapters.office import WordAdapter, ExcelAdapter, PowerPointAdapter
 from aibridge.adapters.office import WPSWriterAdapter, WPSSpreadsheetAdapter
-from aibridge.adapters.desktop import GenericDesktopAdapter
 
 
 logger = get_logger("main")
@@ -47,24 +33,6 @@ ADAPTER_REGISTRY = {
     # Browser adapters (async)
     "chrome": (ChromeAdapter, ChromeConfig, False),
     "edge": (EdgeAdapter, EdgeConfig, False),
-    # China IM adapters (async)
-    "feishu": (FeishuAdapter, FeishuConfig, False),
-    "dingtalk": (DingtalkAdapter, DingtalkConfig, False),
-    "wecom": (WecomAdapter, WecomConfig, False),
-    # Global IM - Enterprise (async)
-    "slack": (SlackAdapter, SlackConfig, False),
-    "teams": (TeamsAdapter, TeamsConfig, False),
-    "discord": (DiscordAdapter, DiscordConfig, False),
-    "google_chat": (GoogleChatAdapter, GoogleChatConfig, False),
-    # Global IM - Consumer (async)
-    "telegram": (TelegramAdapter, TelegramConfig, False),
-    "whatsapp": (WhatsAppAdapter, WhatsAppConfig, False),
-    "messenger": (MessengerAdapter, MessengerConfig, False),
-    "line": (LINEAdapter, LINEConfig, False),
-    "viber": (ViberAdapter, ViberConfig, False),
-    "kakaotalk": (KakaoTalkAdapter, KakaoTalkConfig, False),
-    # Desktop adapter (sync)
-    "desktop": (GenericDesktopAdapter, DesktopConfig, True),
 }
 
 # Office adapters (grouped, all sync)

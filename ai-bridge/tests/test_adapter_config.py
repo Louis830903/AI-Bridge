@@ -6,8 +6,8 @@ Tests for adapter config module
 import os
 import pytest
 from aibridge.core.adapter_config import (
-    BaseAdapterConfig, ChromeConfig, FeishuConfig, SlackConfig,
-    TelegramConfig, WhatsAppConfig, OfficeConfig, DesktopConfig,
+    BaseAdapterConfig, ChromeConfig, EdgeConfig,
+    OfficeConfig, WPSConfig,
     create_config, CONFIG_CLASS_MAP
 )
 
@@ -75,82 +75,22 @@ class TestChromeConfig:
         assert config.timeout == 60
 
 
-class TestFeishuConfig:
-    """Test FeishuConfig."""
+class TestEdgeConfig:
+    """Test EdgeConfig."""
     
     def test_default_values(self):
-        """Test Feishu config defaults."""
-        config = FeishuConfig()
+        """Test Edge config defaults."""
+        config = EdgeConfig()
         
-        assert config.app_id == ""
-        assert config.app_secret == ""
-        assert config.encrypt_key == ""
+        assert config.cdp_url == "http://localhost:9223"
+        assert config.headless is False
     
-    def test_with_credentials(self):
-        """Test Feishu config with credentials."""
-        config = FeishuConfig(
-            app_id="cli_xxx",
-            app_secret="secret123"
-        )
+    def test_custom_values(self):
+        """Test Edge config with custom values."""
+        config = EdgeConfig(cdp_url="http://remote:9223", headless=True)
         
-        assert config.app_id == "cli_xxx"
-        assert config.app_secret == "secret123"
-
-
-class TestSlackConfig:
-    """Test SlackConfig."""
-    
-    def test_default_values(self):
-        """Test Slack config defaults."""
-        config = SlackConfig()
-        
-        assert config.bot_token == ""
-        assert config.app_token == ""
-        assert config.default_channel == ""
-    
-    def test_with_token(self):
-        """Test Slack config with token."""
-        config = SlackConfig(
-            bot_token="xoxb-xxx",
-            default_channel="#general"
-        )
-        
-        assert config.bot_token == "xoxb-xxx"
-        assert config.default_channel == "#general"
-
-
-class TestTelegramConfig:
-    """Test TelegramConfig."""
-    
-    def test_default_values(self):
-        """Test Telegram config defaults."""
-        config = TelegramConfig()
-        
-        assert config.bot_token == ""
-        assert config.default_chat == ""
-        assert config.parse_mode == "HTML"
-    
-    def test_parse_mode_options(self):
-        """Test different parse modes."""
-        config = TelegramConfig(parse_mode="Markdown")
-        assert config.parse_mode == "Markdown"
-
-
-class TestWhatsAppConfig:
-    """Test WhatsAppConfig."""
-    
-    def test_default_values(self):
-        """Test WhatsApp config defaults."""
-        config = WhatsAppConfig()
-        
-        assert config.phone_number_id == ""
-        assert config.access_token == ""
-        assert config.api_version == "v18.0"
-    
-    def test_api_version(self):
-        """Test custom API version."""
-        config = WhatsAppConfig(api_version="v19.0")
-        assert config.api_version == "v19.0"
+        assert config.cdp_url == "http://remote:9223"
+        assert config.headless is True
 
 
 class TestOfficeConfig:
@@ -169,19 +109,19 @@ class TestOfficeConfig:
         assert config.visible is False
 
 
-class TestDesktopConfig:
-    """Test DesktopConfig."""
+class TestWPSConfig:
+    """Test WPSConfig."""
     
     def test_default_values(self):
-        """Test Desktop config defaults."""
-        config = DesktopConfig()
+        """Test WPS config defaults."""
+        config = WPSConfig()
         
-        assert config.backend == "uia"
+        assert config.visible is True
     
-    def test_win32_backend(self):
-        """Test win32 backend configuration."""
-        config = DesktopConfig(backend="win32")
-        assert config.backend == "win32"
+    def test_hidden_mode(self):
+        """Test hidden mode configuration."""
+        config = WPSConfig(visible=False)
+        assert config.visible is False
 
 
 class TestConfigClassMap:
@@ -189,12 +129,7 @@ class TestConfigClassMap:
     
     def test_all_adapters_mapped(self):
         """Test all adapters have config classes."""
-        expected = [
-            "chrome", "edge", "feishu", "dingtalk", "wecom",
-            "slack", "teams", "discord", "google_chat",
-            "telegram", "whatsapp", "messenger", "line", "viber", "kakaotalk",
-            "office", "wps", "desktop"
-        ]
+        expected = ["chrome", "edge", "office", "wps"]
         
         for adapter_id in expected:
             assert adapter_id in CONFIG_CLASS_MAP
@@ -216,12 +151,12 @@ class TestCreateConfig:
         assert isinstance(config, ChromeConfig)
         assert config.cdp_url == "http://test:9222"
     
-    def test_create_feishu_config(self):
-        """Test creating Feishu config."""
-        config = create_config("feishu", {"app_id": "test"})
+    def test_create_office_config(self):
+        """Test creating Office config."""
+        config = create_config("office", {"visible": False})
         
-        assert isinstance(config, FeishuConfig)
-        assert config.app_id == "test"
+        assert isinstance(config, OfficeConfig)
+        assert config.visible is False
     
     def test_create_unknown_adapter(self):
         """Test creating config for unknown adapter."""
@@ -232,24 +167,14 @@ class TestCreateConfig:
     
     def test_create_with_empty_data(self):
         """Test creating config with empty data."""
-        config = create_config("slack", {})
+        config = create_config("chrome", {})
         
-        assert isinstance(config, SlackConfig)
-        assert config.bot_token == ""  # Default value
+        assert isinstance(config, ChromeConfig)
+        assert config.cdp_url == "http://localhost:9222"  # Default value
 
 
 class TestFromEnv:
     """Test from_env class method."""
-    
-    def test_from_env_with_prefix(self, monkeypatch):
-        """Test creating config from environment variables."""
-        monkeypatch.setenv("FEISHU_APP_ID", "env_app_id")
-        monkeypatch.setenv("FEISHU_APP_SECRET", "env_secret")
-        
-        config = FeishuConfig.from_env("FEISHU")
-        
-        assert config.app_id == "env_app_id"
-        assert config.app_secret == "env_secret"
     
     def test_from_env_bool_conversion(self, monkeypatch):
         """Test boolean conversion from env."""
@@ -261,8 +186,16 @@ class TestFromEnv:
     
     def test_from_env_int_conversion(self, monkeypatch):
         """Test integer conversion from env."""
-        monkeypatch.setenv("SLACK_TIMEOUT", "60")
+        monkeypatch.setenv("CHROME_TIMEOUT", "60")
         
-        config = SlackConfig.from_env("SLACK")
+        config = ChromeConfig.from_env("CHROME")
         
         assert config.timeout == 60
+    
+    def test_from_env_with_cdp_url(self, monkeypatch):
+        """Test creating config from environment variables."""
+        monkeypatch.setenv("CHROME_CDP_URL", "http://env:9222")
+        
+        config = ChromeConfig.from_env("CHROME")
+        
+        assert config.cdp_url == "http://env:9222"
