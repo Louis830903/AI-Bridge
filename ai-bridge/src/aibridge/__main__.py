@@ -1,6 +1,13 @@
 """AI-Bridge CLI entry point
 
 Uses unified adapter configuration system (dataclass-based)
+
+Commands:
+    python -m aibridge              # Run MCP server
+    python -m aibridge doctor       # Environment diagnosis
+    python -m aibridge init         # Configuration wizard
+    python -m aibridge --version    # Show version
+    python -m aibridge --list-adapters  # List adapters
 """
 
 import asyncio
@@ -100,10 +107,31 @@ async def run_server(config):
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="AI-Bridge: Bridge AI Assistants to GUI Applications"
+        description="AI-Bridge: MCP + A2A Dual Protocol Gateway for AI Assistants",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python -m aibridge              启动 MCP Server
+  python -m aibridge doctor       环境诊断
+  python -m aibridge init         配置向导
+  python -m aibridge --list-adapters  查看适配器
+"""
     )
+    
+    # Subcommands
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+    
+    # doctor command
+    doctor_parser = subparsers.add_parser("doctor", help="环境诊断，检查依赖和配置")
+    doctor_parser.add_argument("-v", "--verbose", action="store_true", help="详细输出")
+    
+    # init command
+    init_parser = subparsers.add_parser("init", help="配置向导，生成配置文件")
+    init_parser.add_argument("-o", "--output", default="config.yaml", help="配置文件输出路径")
+    
+    # Global options
     parser.add_argument(
-        "--version", "-v",
+        "--version", "-V",
         action="version",
         version=f"AI-Bridge {__version__}"
     )
@@ -124,6 +152,15 @@ def main():
     )
     
     args = parser.parse_args()
+    
+    # Handle subcommands
+    if args.command == "doctor":
+        from aibridge.cli.doctor import run_doctor
+        return run_doctor(verbose=getattr(args, 'verbose', False))
+    
+    if args.command == "init":
+        from aibridge.cli.init_wizard import run_init_wizard
+        return run_init_wizard(output=getattr(args, 'output', 'config.yaml'))
     
     # Setup logging
     setup_logging(level=args.log_level)

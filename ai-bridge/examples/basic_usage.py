@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
 """
-AI-Bridge v3.0 基础使用示例
+AI-Bridge v5.0 基础使用示例
 Basic usage examples for AI-Bridge
 
 这个文件展示了如何直接使用 AI-Bridge 的 Python API，
 而不是通过 MCP 协议。适合快速测试和脚本自动化场景。
 
-v3.0 战略定位: MCP + A2A 双协议网关 + CLI 工具适配器
+v5.0 战略定位: MCP + A2A 双协议网关 + 企业级可观测性
+
+新功能:
+- Agent Card 发布与发现
+- Prometheus 指标导出
+- Agent Registry 注册中心
+- A2A Streaming 流式支持
+- Audit Log 持久化
+- MCP Server 动态发现
 """
 
 import asyncio
@@ -254,8 +262,8 @@ async def example_mcp_registry():
 def main():
     """运行所有示例"""
     print("=" * 60)
-    print("  AI-Bridge v3.0 基础使用示例")
-    print("  战略定位: MCP + A2A 双协议网关 + CLI 工具适配器")
+    print("  AI-Bridge v5.0 基础使用示例")
+    print("  战略定位: MCP + A2A 双协议网关 + 企业级可观测性")
     print("=" * 60)
     
     # 选择要运行的示例

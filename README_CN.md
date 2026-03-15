@@ -171,6 +171,19 @@ pip install ai-bridge
 
 # 完整安装（所有功能）
 pip install ai-bridge[all]
+
+# Docker 一键部署（推荐生产环境）
+docker run -p 9090:9090 aibridge/server:v5.0
+```
+
+### 环境检查
+
+```bash
+# 运行环境诊断
+python -m aibridge doctor
+
+# 交互式配置向导
+python -m aibridge init
 ```
 
 ### 作为 MCP Server（Claude Desktop 集成）

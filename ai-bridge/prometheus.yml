@@ -1,0 +1,14 @@
+# AI-Bridge Prometheus 配置
+# 用于监控 AI-Bridge 服务指标
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # AI-Bridge 指标
+  - job_name: 'aibridge'
+    static_configs:
+      - targets: ['aibridge:9090']
+    metrics_path: /metrics
+    scrape_interval: 10s

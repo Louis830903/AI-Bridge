@@ -1,0 +1,96 @@
+# AI-Bridge v5.0 Docker Compose 配置
+# MCP + A2A 双协议网关
+#
+# 使用方法:
+#   docker-compose up -d              # 启动服务
+#   docker-compose logs -f            # 查看日志
+#   docker-compose down               # 停止服务
+#
+# 访问:
+#   - Prometheus 指标: http://localhost:9090/metrics
+#   - Grafana 面板:    http://localhost:3000 (admin/admin)
+
+version: '3.8'
+
+services:
+  # AI-Bridge 主服务
+  aibridge:
+    build: .
+    image: aibridge:v5.0
+    container_name: aibridge
+    restart: unless-stopped
+    ports:
+      - "9090:9090"   # Prometheus 指标
+      - "8080:8080"   # Web Dashboard (可选)
+    environment:
+      # 基础配置
+      - AIBRIDGE_LOG_LEVEL=INFO
+      # 浏览器配置
+      - AIBRIDGE_CHROME_ENABLED=true
+      - AIBRIDGE_CHROME_HEADLESS=true
+      # 企业特性
+      - AIBRIDGE_METRICS_ENABLED=true
+      - AIBRIDGE_METRICS_PORT=9090
+      - AIBRIDGE_AUDIT_ENABLED=true
+      - AIBRIDGE_AUDIT_BACKEND=sqlite
+    volumes:
+      # 持久化审计日志
+      - aibridge_data:/app/data
+      # 配置文件 (可选)
+      # - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - aibridge-net
+
+  # Prometheus 监控 (可选)
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: aibridge-prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - aibridge-net
+    profiles:
+      - monitoring
+
+  # Grafana 可视化 (可选)
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: aibridge-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - aibridge-net
+    profiles:
+      - monitoring
+
+volumes:
+  aibridge_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  aibridge-net:
+    driver: bridge

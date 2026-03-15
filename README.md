@@ -145,6 +145,19 @@ pip install ai-bridge[browser]
 
 # With all features
 pip install ai-bridge[all]
+
+# Docker (recommended for production)
+docker run -p 9090:9090 aibridge/server:v5.0
+```
+
+### Environment Check
+
+```bash
+# Run diagnostics to check your environment
+python -m aibridge doctor
+
+# Interactive configuration wizard
+python -m aibridge init
 ```
 
 ### As MCP Server (Claude Desktop)
