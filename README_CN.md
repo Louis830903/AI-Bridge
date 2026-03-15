@@ -34,7 +34,8 @@
 + Browser Connector - 代理成熟 MCP Server (Browser Use, Chrome DevTools, Playwright)
 + Protocol Bridge - MCP ↔ A2A 协议互通
 + 企业级特性 - 认证、审计、限流、健康检查
-+ CLI 工具适配器 - FFmpeg、Pandoc、yt-dlp、ImageMagick 等
++ CLI 工具适配器 - FFmpeg、Pandoc、yt-dlp、ImageMagick、SoX、Prettier、Docker
++ MCP 连接器 - SQLite、Firecrawl、Notion、Slack
 ```
 
 </td>
@@ -98,7 +99,7 @@
 
 | 🔗 **协议网关** | 🤖 **全 AI 兼容** | 🌐 **浏览器连接器** | 🛠️ **CLI 工具** | 📊 **办公套件** | 🔐 **企业特性** |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-| MCP + A2A 双协议支持，统一入口 | Claude、GPT、千问、Gemini 等 | 代理 Browser Use、Chrome DevTools、Playwright | FFmpeg、Pandoc、yt-dlp、ImageMagick | Word、Excel、PPT、WPS | 认证、审计、限流 |
+| MCP + A2A 双协议支持，统一入口 | Claude、GPT、千问、Gemini 等 | 代理 Browser Use、Chrome DevTools、Playwright | FFmpeg、Pandoc、yt-dlp、SoX、Prettier、Docker | Word、Excel、PPT、WPS | 认证、审计、限流 |
 
 </div>
 
@@ -237,12 +238,19 @@ asyncio.run(main())
 - **ImageMagick** - 图片处理
 - **Blender** - 3D 渲染
 - **Playwright** - 浏览器自动化 CLI
+- **SoX** - 音频处理（转换、剪辑、拼接、特效）
+- **Prettier** - 代码格式化（多语言支持）
+- **Docker** - 容器操作（镜像、容器、卷）
 
 ### MCP 生态连接器
 - **Browser** - 代理到 Browser Use、Chrome DevTools MCP、Playwright MCP
 - **Database** - PostgreSQL、MySQL、SQLite（通过 MCP）
 - **Filesystem** - 文件操作（通过 MCP）
 - **GitHub** - 仓库操作（通过 MCP）
+- **SQLite** - 轻量数据库（查询、执行、表管理）
+- **Firecrawl** - 网页抓取（抓取、爬取、搜索、提取）
+- **Notion** - 团队协作（页面、数据库、内容块）
+- **Slack** - 通讯集成（消息、频道、文件）
 
 <br/>
 

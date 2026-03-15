@@ -56,7 +56,8 @@
 + Protocol Bridge - MCP ↔ A2A interoperability  
 + Service Discovery - Health check and auto-failover
 + Enterprise Features - Auth, Audit, Rate Limiting, Health Check
-+ CLI Tool Adapters - FFmpeg, Pandoc, yt-dlp, ImageMagick, and more
++ CLI Tool Adapters - FFmpeg, Pandoc, yt-dlp, ImageMagick, SoX, Prettier, Docker
++ MCP Connectors - SQLite, Firecrawl, Notion, Slack
 ```
 
 ---
@@ -105,7 +106,7 @@ Any AI Tool → AI-Bridge Gateway → MCP or A2A Protocol
 | 🔗 | **Protocol Gateway** | MCP + A2A dual protocol support, unified entry point |
 | 🤖 | **Universal AI Support** | Claude, GPT, Qwen, Gemini, any MCP-compatible AI |
 | 🌐 | **Browser Connector** | Proxy to Browser Use, Chrome DevTools MCP, Playwright MCP |
-| 🛠️ | **CLI Tool Adapters** | FFmpeg, Pandoc, yt-dlp, ImageMagick, Blender, Playwright |
+| 🛠️ | **CLI Tool Adapters** | FFmpeg, Pandoc, yt-dlp, ImageMagick, Blender, SoX, Prettier, Docker |
 | 📊 | **Office Suite** | Word, Excel, PowerPoint, WPS Office |
 | 🔐 | **Enterprise Features** | Auth middleware, Audit logging, Rate limiting |
 | 🧠 | **Multi-Agent** | A2A protocol for agent collaboration |
@@ -249,12 +250,19 @@ asyncio.run(main())
 - **ImageMagick** - Image manipulation
 - **Blender** - 3D rendering
 - **Playwright** - Browser automation CLI
+- **SoX** - Audio processing (convert, trim, concat, effects)
+- **Prettier** - Code formatting (multi-language support)
+- **Docker** - Container operations (images, containers, volumes)
 
 ### MCP Ecosystem Connectors
 - **Browser** - Proxy to Browser Use, Chrome DevTools MCP, Playwright MCP
 - **Database** - PostgreSQL, MySQL, SQLite via MCP
 - **Filesystem** - File operations via MCP
 - **GitHub** - Repository operations via MCP
+- **SQLite** - Lightweight database (query, execute, tables)
+- **Firecrawl** - Web scraping (scrape, crawl, search, extract)
+- **Notion** - Team collaboration (pages, databases, blocks)
+- **Slack** - Communication (messages, channels, files)
 
 ---
 
