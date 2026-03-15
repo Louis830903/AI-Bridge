@@ -30,12 +30,16 @@ _BUILTIN_ADAPTERS = {
     "blender": ("aibridge.adapters.cli.blender", "BlenderAdapter"),
     "ffmpeg": ("aibridge.adapters.cli.ffmpeg", "FFmpegAdapter"),
     "shotcut": ("aibridge.adapters.cli.shotcut", "ShotcutAdapter"),
-    # New 5 adapters
+    # Extended adapters (Phase 2)
     "aider": ("aibridge.adapters.cli.aider", "AiderAdapter"),
     "imagemagick": ("aibridge.adapters.cli.imagemagick", "ImageMagickAdapter"),
     "pandoc": ("aibridge.adapters.cli.pandoc", "PandocAdapter"),
     "ytdlp": ("aibridge.adapters.cli.ytdlp", "YTDLPAdapter"),
     "playwright": ("aibridge.adapters.cli.playwright", "PlaywrightAdapter"),
+    # New adapters (Phase 3)
+    "sox": ("aibridge.adapters.cli.sox", "SoXAdapter"),
+    "prettier": ("aibridge.adapters.cli.prettier", "PrettierAdapter"),
+    "docker": ("aibridge.adapters.cli.docker", "DockerAdapter"),
 }
 
 # Try to import each built-in adapter
