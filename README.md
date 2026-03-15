@@ -50,22 +50,26 @@
 ## 📢 What's New | 最新动态
 
 ```diff
+🚀 v5.0.0 - Protocol Extension & Enterprise Observability!
++ Agent Card - A2A-compliant agent discovery and registration
++ Prometheus Metrics - /metrics endpoint with tool/agent/system stats
++ Agent Registry - Centralized agent management with load balancing
++ A2A Streaming - SSE/WebSocket real-time communication
++ Audit Log Persistence - SQLite/File/Memory multi-backend storage
++ MCP Server Discovery - Auto-detect Claude Desktop servers
++ 647+ Tests - Enterprise-grade test coverage
++ Security Hardened - Passed comprehensive security audit
+
 🎉 v4.0.0 - Enterprise Management Layer!
 + Policy Engine - Tool-level access control (PBAC)
 + Metering System - Usage tracking and cost estimation
 + Distributed Tracing - OpenTelemetry compatible tracing
 + Multi-Agent Orchestrator - DAG-based task scheduling
-+ Protocol Bridge Enhancement - Bidirectional MCP ↔ A2A conversion
-+ 473+ Tests - Comprehensive test coverage
 
 🔧 v3.0.0 - Protocol Gateway Architecture!
-+ MCP + A2A Dual Protocol Gateway - Unified entry point for AI tools
-+ Browser Connector - Proxy to mature MCP Servers (Browser Use, Chrome DevTools, Playwright)
-+ Protocol Bridge - MCP ↔ A2A interoperability  
-+ Service Discovery - Health check and auto-failover
++ MCP + A2A Dual Protocol Gateway - Unified entry point
++ Browser Connector - Proxy to Browser Use, Chrome DevTools, Playwright
 + Enterprise Features - Auth, Audit, Rate Limiting, Health Check
-+ CLI Tool Adapters - FFmpeg, Pandoc, yt-dlp, ImageMagick, SoX, Prettier, Docker
-+ MCP Connectors - SQLite, Firecrawl, Notion, Slack
 ```
 
 ---
@@ -120,6 +124,9 @@ Any AI Tool → AI-Bridge Gateway → MCP or A2A Protocol
 | 📊 | **Metering & Quota** | Usage tracking, cost estimation, quota management |
 | 🔍 | **Distributed Tracing** | OpenTelemetry compatible, cross-service tracing |
 | 🧠 | **Multi-Agent** | A2A protocol, DAG orchestrator for agent collaboration |
+| 🎯 | **Agent Registry** | Centralized agent discovery with load balancing |
+| 📡 | **A2A Streaming** | Real-time SSE/WebSocket communication |
+| 📈 | **Prometheus Metrics** | Built-in /metrics endpoint for observability |
 
 </div>
 
@@ -221,9 +228,16 @@ asyncio.run(main())
                      │ MCP / A2A Protocol
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              AI-Bridge v4.0 Protocol Gateway                 │
+│              AI-Bridge v5.0 Protocol Gateway                 │
 │  ┌─────────────────────────────────────────────────────────┐  │
-│  │             Enterprise Management Layer (v4.0)            │  │
+│  │          Protocol Extension Layer (v5.0)                  │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │  │
+│  │  │  Agent   │ │Prometheus│ │   A2A    │ │   MCP    │ │  │
+│  │  │ Registry │ │ Metrics  │ │Streaming │ │Discovery │ │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │          Enterprise Management Layer (v4.0)              │  │
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │  │
 │  │  │  Policy  │ │ Metering │ │ Tracing  │ │Orchestrator│ │  │
 │  │  │  Engine  │ │ Collector│ │  (OTel)  │ │   (DAG)  │ │  │
@@ -233,7 +247,7 @@ asyncio.run(main())
 │  │ MCP Registry │  │ A2A Gateway  │  │Protocol Bridge│      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │     Auth     │  │    Audit     │  │ Rate Limiter │      │
+│  │     Auth     │  │  Audit Log   │  │ Rate Limiter │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 └────────────────────┬────────────────────────────────────────┘
                      │
