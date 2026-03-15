@@ -8,6 +8,7 @@
 """
 
 import asyncio
+import inspect
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -185,7 +186,7 @@ class ServiceDiscovery:
             start = asyncio.get_event_loop().time()
             
             # 执行健康检查
-            if asyncio.iscoroutinefunction(checker):
+            if inspect.iscoroutinefunction(checker):
                 result = await checker(service)
             else:
                 result = checker(service)

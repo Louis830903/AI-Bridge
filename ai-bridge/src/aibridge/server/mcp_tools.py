@@ -24,9 +24,10 @@ Usage:
 """
 
 import asyncio
-import inspect
+import inspect as inspect_module
 import json
 import logging
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Type, Union, get_type_hints
 
@@ -84,14 +85,16 @@ class MCPTool:
     
     async def execute(self, params: dict) -> dict:
         """Execute the tool with given parameters."""
+        adapter_created = False
         try:
             # Initialize adapter if needed
             if self.adapter_class and not self.adapter_instance:
                 self.adapter_instance = self.adapter_class()
                 await self.adapter_instance.initialize()
+                adapter_created = True
             
             # Call handler
-            if asyncio.iscoroutinefunction(self.handler):
+            if inspect_module.iscoroutinefunction(self.handler):
                 result = await self.handler(**params)
             else:
                 result = self.handler(**params)
@@ -116,6 +119,13 @@ class MCPTool:
                 ],
                 "isError": True
             }
+        finally:
+            # Cleanup adapter if we created it (not persistent)
+            if adapter_created and self.adapter_instance and hasattr(self.adapter_instance, 'cleanup'):
+                try:
+                    await self.adapter_instance.cleanup()
+                except Exception:
+                    pass  # Best effort cleanup
 
 
 class MCPToolRegistry:
@@ -123,14 +133,19 @@ class MCPToolRegistry:
     Registry for MCP Tools.
     
     Manages tool registration, schema generation, and execution.
+    Thread-safe singleton implementation.
     """
     _instance = None
+    _lock = threading.Lock()
     _tools: Dict[str, MCPTool] = {}
     
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._tools = {}
+            with cls._lock:
+                # Double-check locking pattern
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._tools = {}
         return cls._instance
     
     def register(self, tool: MCPTool) -> None:
@@ -201,7 +216,7 @@ def mcp_tool(
         # Build parameter list
         tool_params = []
         type_hints = get_type_hints(func)
-        sig = inspect.signature(func)
+        sig = inspect_module.signature(func)
         
         params_dict = parameters or {}
         
@@ -228,8 +243,8 @@ def mcp_tool(
                 name=param_name,
                 type=param_def.get("type", "string"),
                 description=param_def.get("description", ""),
-                required=param_def.get("required", param.default == inspect.Parameter.empty),
-                default=param.default if param.default != inspect.Parameter.empty else None,
+                required=param_def.get("required", param.default == inspect_module.Parameter.empty),
+                default=param.default if param.default != inspect_module.Parameter.empty else None,
                 enum=param_def.get("enum")
             ))
         

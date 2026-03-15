@@ -6,6 +6,8 @@ LLM Provider - 共享 LLM 接口
 
 from typing import Protocol, Optional, Any, List, Dict
 from abc import ABC, abstractmethod
+import asyncio
+import inspect
 import logging
 
 logger = logging.getLogger(__name__)
@@ -175,7 +177,7 @@ class AgentSharedLLM(LLMProvider):
     
     async def complete(self, prompt: str, **kwargs) -> str:
         """调用外部 LLM"""
-        if asyncio.iscoroutinefunction(self.callback):
+        if inspect.iscoroutinefunction(self.callback):
             return await self.callback(prompt, **kwargs)
         else:
             return self.callback(prompt, **kwargs)

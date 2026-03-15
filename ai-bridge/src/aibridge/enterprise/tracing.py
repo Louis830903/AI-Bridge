@@ -14,6 +14,7 @@
 """
 
 import asyncio
+import inspect
 import logging
 import time
 import uuid
@@ -727,7 +728,7 @@ class Tracer:
         def decorator(func: Callable):
             span_name = name or func.__name__
             
-            if asyncio.iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
                 async def async_wrapper(*args, **kwargs):
                     async with self.start_as_current_span_async(
                         span_name, kind, attributes=attributes
