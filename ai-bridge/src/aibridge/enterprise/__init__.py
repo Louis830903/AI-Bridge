@@ -11,6 +11,10 @@
 - policy: 工具级权限策略 (PBAC)
 - metering: 调用成本计量
 - tracing: 分布式链路追踪
+
+v5.0 新增：
+- prometheus: Prometheus 指标导出
+- metering_prometheus: Metering-Prometheus 适配
 """
 
 from .auth import (
@@ -85,6 +89,26 @@ from .tracing import (
     set_tracer,
 )
 
+# v5.0: Prometheus 指标
+from .prometheus import (
+    PrometheusRegistry,
+    CounterMetric,
+    GaugeMetric,
+    HistogramMetric,
+    MetricLabels,
+    MetricType,
+    AIBridgeMetrics,
+    MetricsMiddleware,
+    MetricsExporter,
+    get_registry,
+    set_registry,
+)
+from .metering_prometheus import (
+    MeteringPrometheusAdapter,
+    MeteringHook,
+    create_metering_prometheus_adapter,
+)
+
 __all__ = [
     # Auth
     "AuthMiddleware",
@@ -150,4 +174,20 @@ __all__ = [
     "TracingMiddleware",
     "get_tracer",
     "set_tracer",
+    # Prometheus (v5.0)
+    "PrometheusRegistry",
+    "CounterMetric",
+    "GaugeMetric",
+    "HistogramMetric",
+    "MetricLabels",
+    "MetricType",
+    "AIBridgeMetrics",
+    "MetricsMiddleware",
+    "MetricsExporter",
+    "get_registry",
+    "set_registry",
+    # Metering-Prometheus (v5.0)
+    "MeteringPrometheusAdapter",
+    "MeteringHook",
+    "create_metering_prometheus_adapter",
 ]
