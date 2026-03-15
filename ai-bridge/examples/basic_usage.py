@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-AI-Bridge 基础使用示例
+AI-Bridge v3.0 基础使用示例
 Basic usage examples for AI-Bridge
 
 这个文件展示了如何直接使用 AI-Bridge 的 Python API，
 而不是通过 MCP 协议。适合快速测试和脚本自动化场景。
+
+v3.0 战略定位: MCP + A2A 双协议网关 + CLI 工具适配器
 """
 
 import asyncio
@@ -16,8 +18,8 @@ from aibridge.core.protocol import Request, Target, RequestOptions
 
 
 async def example_browser_automation():
-    """浏览器自动化示例"""
-    print("\n=== 浏览器自动化示例 ===\n")
+    """浏览器自动化示例 (Direct Adapter)"""
+    print("\n=== 浏览器自动化示例 (Direct Adapter) ===\n")
     
     from aibridge.adapters.browser.chrome import ChromeAdapter, ChromeConfig
     
@@ -46,7 +48,7 @@ async def example_browser_automation():
         result = await adapter.execute(
             action="type",
             target=Target(css="#kw"),
-            value="AI-Bridge 自动化框架",
+            value="AI-Bridge MCP 协议网关",
             options={}
         )
         print(f"✓ 输入搜索内容: {result}")
@@ -77,48 +79,53 @@ async def example_browser_automation():
         print("✓ 浏览器已关闭")
 
 
-async def example_feishu_message():
-    """飞书发送消息示例"""
-    print("\n=== 飞书消息示例 ===\n")
+async def example_gateway_browser():
+    """v3.0 协议网关 - 浏览器连接器示例"""
+    print("\n=== v3.0 协议网关 - Browser Connector ===\n")
     
-    from aibridge.adapters.im.feishu import FeishuAdapter, FeishuConfig
+    from aibridge.connectors.mcp import BrowserConnector, BrowserConnectorConfig
+    from aibridge.connectors.mcp.browser import BrowserBackend
     
-    # 配置飞书应用凭证 (需要替换为真实值)
-    config = FeishuConfig(
-        app_id="your_app_id",
-        app_secret="your_app_secret"
+    # 创建配置 (自动选择可用后端)
+    config = BrowserConnectorConfig(
+        name="browser",
+        backend=BrowserBackend.AUTO,
+        headless=True,
+        viewport_width=1280,
+        viewport_height=720,
     )
-    adapter = FeishuAdapter(config)
     
-    try:
-        # 连接飞书
-        connected = await adapter.connect()
-        if not connected:
-            print("✗ 飞书连接失败，请检查凭证")
-            return
-        print("✓ 飞书已连接")
-        
-        # 发送消息到群聊
-        result = await adapter.execute(
-            action="send_message",
-            target=Target(name="oc_xxx"),  # 群聊 chat_id
-            value="Hello from AI-Bridge! 🚀",
-            options={}
-        )
-        print(f"✓ 消息发送结果: {result}")
-        
-    finally:
-        await adapter.disconnect()
-        print("✓ 飞书已断开")
+    print(f"✓ 浏览器连接器配置:")
+    print(f"  - 后端: {config.backend.value}")
+    print(f"  - 无头模式: {config.headless}")
+    print(f"  - 视口: {config.viewport_width}x{config.viewport_height}")
+    
+    # 创建连接器
+    connector = BrowserConnector(config)
+    print(f"✓ 连接器创建成功")
+    print(f"  - 状态: {connector.status.value}")
+    
+    # 检测可用后端
+    print(f"\n检测可用的浏览器后端...")
+    backend = await connector._detect_available_backend()
+    if backend:
+        print(f"✓ 检测到可用后端: {backend.value}")
+    else:
+        print("✗ 未检测到可用后端")
+        print("  提示: 请安装以下任一 MCP Server:")
+        print("    npm install -g @anthropic-ai/browser-use-mcp")
+        print("    npm install -g @anthropic-ai/mcp-server-chrome-devtools")
+        print("    npm install -g @anthropic-ai/mcp-server-playwright")
 
 
 async def example_office_word():
     """Word 文档操作示例"""
     print("\n=== Word 文档示例 ===\n")
     
-    from aibridge.adapters.office.word import WordAdapter, WordConfig
+    from aibridge.adapters.office.word import WordAdapter
+    from aibridge.core.adapter_config import OfficeConfig
     
-    config = WordConfig(visible=True)
+    config = OfficeConfig(visible=True)
     adapter = WordAdapter(config)
     
     try:
@@ -139,7 +146,7 @@ async def example_office_word():
         result = await adapter.execute(
             action="write",
             target=None,
-            value="AI-Bridge 自动化报告\n\n这是一份由 AI-Bridge 自动生成的文档。",
+            value="AI-Bridge v3.0 协议网关报告\n\n这是一份由 AI-Bridge 自动生成的文档。",
             options={}
         )
         print(f"✓ 写入内容: {result}")
@@ -158,93 +165,106 @@ async def example_office_word():
         print("✓ Word 已关闭")
 
 
-async def example_adapter_manager():
-    """使用 AdapterManager 统一管理示例"""
-    print("\n=== AdapterManager 统一管理示例 ===\n")
+async def example_a2a_gateway():
+    """v3.0 A2A Gateway Agent 协作示例"""
+    print("\n=== v3.0 A2A Gateway Agent 协作 ===\n")
     
-    from aibridge.adapters.browser.chrome import ChromeAdapter, ChromeConfig
-    
-    manager = AdapterManager()
-    
-    # 注册适配器
-    chrome_config = ChromeConfig(headless=True)
-    manager.register(ChromeAdapter(chrome_config))
-    print("✓ 注册 Chrome 适配器")
-    
-    # 列出所有适配器
-    adapters = manager.list_adapters()
-    print(f"✓ 已注册适配器: {[a.info.name for a in adapters]}")
-    
-    # 获取特定适配器
-    chrome = manager.get("chrome")
-    if chrome:
-        await chrome.connect()
-        print("✓ 通过 Manager 获取并连接 Chrome")
-        
-        # 执行操作
-        result = await manager.execute(
-            app="chrome",
-            action="goto",
-            target=None,
-            value="https://github.com",
-            options={}
-        )
-        print(f"✓ 打开 GitHub: {result}")
-        
-        await chrome.disconnect()
-    
-    print("✓ 示例完成")
-
-
-async def example_mcp_server():
-    """启动 MCP Server 示例"""
-    print("\n=== MCP Server 示例 ===\n")
-    
-    from aibridge.core.server import AIBridgeServer
-    from aibridge.core.manager import AdapterManager
-    from aibridge.adapters.browser.chrome import ChromeAdapter, ChromeConfig
-    
-    # 创建管理器并注册适配器
-    manager = AdapterManager()
-    manager.register(ChromeAdapter(ChromeConfig(headless=True)))
-    
-    # 创建 MCP Server
-    server = AIBridgeServer(manager)
-    
-    # 获取可用工具列表
-    tools = server.get_tools()
-    print("✓ MCP 工具列表:")
-    for tool in tools:
-        print(f"  - {tool['name']}: {tool['description'][:50]}...")
-    
-    # 模拟工具调用
-    result = await server.handle_tool_call(
-        name="aibridge_interact",
-        arguments={
-            "app": "chrome",
-            "action": "goto",
-            "value": "https://www.bing.com"
-        }
+    from aibridge.gateway import (
+        A2AGateway,
+        AgentCard,
+        A2ATask,
     )
-    print(f"✓ 工具调用结果: {result}")
+    from aibridge.gateway.a2a_gateway import AgentCapability
     
-    # 如果要启动真正的 MCP Server (会阻塞):
-    # await server.run_stdio()
+    # 创建 A2A 网关
+    gateway = A2AGateway()
+    
+    # 注册 Web 搜索 Agent
+    web_agent = AgentCard(
+        agent_id="web-search-agent",
+        name="Web Search Agent",
+        description="专门负责网页搜索和信息提取",
+        capabilities=[
+            AgentCapability(
+                name="search",
+                description="在网上搜索信息",
+            ),
+        ]
+    )
+    await gateway.register_agent(web_agent)
+    print(f"✓ 注册 Agent: {web_agent.name}")
+    
+    # 列出所有 Agent
+    agents = await gateway.list_agents()
+    print(f"✓ 已注册的 Agent: {[a.name for a in agents]}")
+    
+    # 创建任务
+    task = A2ATask(
+        from_agent="orchestrator",
+        to_agent="web-search-agent",
+        capability="search",
+        input_data={"query": "AI-Bridge MCP gateway"},
+    )
+    
+    print(f"\n创建任务:")
+    print(f"  - Task ID: {task.task_id}")
+    print(f"  - From: {task.from_agent}")
+    print(f"  - To: {task.to_agent}")
+    
+    # 模拟任务完成
+    task.complete({"results": ["Result 1", "Result 2"]})
+    print(f"\n✓ 任务完成，结果: {task.result}")
+
+
+async def example_mcp_registry():
+    """v3.0 MCP Registry 示例"""
+    print("\n=== v3.0 MCP Registry ===\n")
+    
+    from aibridge.gateway import MCPRegistry, MCPServerConfig
+    from aibridge.gateway.mcp_registry import MCPTransport
+    
+    # 创建注册中心
+    registry = MCPRegistry()
+    
+    # 注册一个 MCP Server（示例配置）
+    config = MCPServerConfig(
+        name="example-server",
+        transport=MCPTransport.STDIO,
+        command="echo",
+        args=["hello"],
+        auto_start=False,
+    )
+    
+    proxy = await registry.register(config)
+    print(f"✓ 注册 MCP Server: {config.name}")
+    
+    # 列出已注册的 Server
+    servers = await registry.list_servers()
+    print(f"✓ 已注册的 Server: {servers}")
+    
+    # 获取状态
+    status = registry.get_server_status()
+    print(f"✓ Server 状态: {status}")
+    
+    # 注销
+    await registry.unregister("example-server")
+    print(f"✓ 注销 MCP Server: example-server")
 
 
 def main():
     """运行所有示例"""
-    print("=" * 50)
-    print("AI-Bridge 基础使用示例")
-    print("=" * 50)
+    print("=" * 60)
+    print("  AI-Bridge v3.0 基础使用示例")
+    print("  战略定位: MCP + A2A 双协议网关 + CLI 工具适配器")
+    print("=" * 60)
     
     # 选择要运行的示例
     examples = {
-        "1": ("浏览器自动化", example_browser_automation),
-        "2": ("飞书消息", example_feishu_message),
+        "1": ("浏览器自动化 (Direct Adapter)", example_browser_automation),
+        "2": ("v3.0 Browser Connector", example_gateway_browser),
         "3": ("Word 文档", example_office_word),
-        "4": ("AdapterManager", example_adapter_manager),
-        "5": ("MCP Server", example_mcp_server),
+        "4": ("v3.0 A2A Gateway", example_a2a_gateway),
+        "5": ("v3.0 MCP Registry", example_mcp_registry),
     }
     
     print("\n可用示例:")

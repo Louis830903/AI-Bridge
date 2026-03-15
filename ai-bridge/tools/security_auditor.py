@@ -15,7 +15,7 @@ from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
 
-REPO_PATH = '/tmp/ai-bridge/ai-bridge'
+REPO_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 @dataclass
@@ -494,7 +494,7 @@ def main():
     print(report)
     
     # 导出 JSON
-    output_file = "/tmp/ai-bridge-security-report.json"
+    output_file = os.path.join(REPO_PATH, "ai-bridge-security-report.json")
     auditor.export_json(output_file)
     
     # 退出码

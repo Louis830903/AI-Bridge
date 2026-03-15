@@ -1,66 +1,28 @@
 {
   "$schema": "https://claude.ai/schemas/mcp-config.json",
-  "$comment": "Claude Desktop MCP 配置示例 - 将此文件内容添加到 Claude Desktop 的 MCP 设置中",
+  "$comment": "Claude Desktop MCP 配置示例 - AI-Bridge v3.0 协议网关",
   
   "mcpServers": {
     "ai-bridge": {
       "command": "python",
       "args": ["-m", "aibridge"],
       "env": {
+        "_comment": "===== 基础配置 =====",
         "AIBRIDGE_LOG_LEVEL": "INFO",
         
-        "_comment_browser": "浏览器配置",
+        "_comment_browser": "===== 浏览器配置 =====",
         "AIBRIDGE_CHROME_ENABLED": "true",
         "AIBRIDGE_CHROME_HEADLESS": "false",
-        
-        "_comment_global_im": "===== 全球 IM 平台 =====",
-        
-        "_comment_slack": "Slack 配置 - 从 https://api.slack.com/apps 获取",
-        "AIBRIDGE_SLACK_ENABLED": "true",
-        "SLACK_BOT_TOKEN": "xoxb-your-slack-bot-token",
-        
-        "_comment_teams": "Microsoft Teams 配置 - 从 Azure Portal 获取",
-        "AIBRIDGE_TEAMS_ENABLED": "true",
-        "TEAMS_TENANT_ID": "your_azure_tenant_id",
-        "TEAMS_CLIENT_ID": "your_azure_client_id",
-        "TEAMS_CLIENT_SECRET": "your_azure_client_secret",
-        
-        "_comment_discord": "Discord 配置 - 从 https://discord.com/developers 获取",
-        "AIBRIDGE_DISCORD_ENABLED": "true",
-        "DISCORD_BOT_TOKEN": "your_discord_bot_token",
-        
-        "_comment_telegram": "Telegram 配置 - 从 @BotFather 获取",
-        "AIBRIDGE_TELEGRAM_ENABLED": "true",
-        "TELEGRAM_BOT_TOKEN": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
-        
-        "_comment_china_im": "===== 中国 IM 平台 =====",
-        
-        "_comment_feishu": "飞书配置 - 从 https://open.feishu.cn 获取",
-        "AIBRIDGE_FEISHU_ENABLED": "true",
-        "FEISHU_APP_ID": "your_feishu_app_id",
-        "FEISHU_APP_SECRET": "your_feishu_app_secret",
-        
-        "_comment_dingtalk": "钉钉配置 - 从 https://open.dingtalk.com 获取",
-        "AIBRIDGE_DINGTALK_ENABLED": "true",
-        "DINGTALK_APP_KEY": "your_dingtalk_app_key",
-        "DINGTALK_APP_SECRET": "your_dingtalk_app_secret",
-        
-        "_comment_wecom": "企业微信配置 - 从 https://work.weixin.qq.com 获取",
-        "AIBRIDGE_WECOM_ENABLED": "true",
-        "WECOM_CORP_ID": "your_wecom_corp_id",
-        "WECOM_CORP_SECRET": "your_wecom_corp_secret",
-        "WECOM_AGENT_ID": "your_wecom_agent_id",
+        "AIBRIDGE_EDGE_ENABLED": "false",
         
         "_comment_office": "===== 办公软件 =====",
+        "AIBRIDGE_OFFICE_ENABLED": "true",
         "AIBRIDGE_WORD_ENABLED": "true",
         "AIBRIDGE_EXCEL_ENABLED": "true",
         "AIBRIDGE_POWERPOINT_ENABLED": "true",
         
-        "_comment_wps": "WPS 配置",
-        "AIBRIDGE_WPS_ENABLED": "false",
-        
-        "_comment_desktop": "通用桌面配置",
-        "AIBRIDGE_DESKTOP_ENABLED": "true"
+        "_comment_wps": "===== WPS 配置 =====",
+        "AIBRIDGE_WPS_ENABLED": "false"
       }
     }
   }

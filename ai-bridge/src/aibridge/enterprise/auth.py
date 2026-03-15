@@ -252,14 +252,14 @@ class JWTAuth(AuthProvider):
             payload_json = base64.urlsafe_b64decode(payload_b64)
             payload = json.loads(payload_json)
             
-            # 验证签名（简化：仅验证 HMAC）
+            # 验证签名（使用安全比较防止时序攻击）
             if self._config.jwt_secret:
                 expected_sig = self._sign(parts[0] + "." + parts[1])
                 actual_sig = parts[2]
-                # 简化比较（生产环境应使用安全比较）
-                if expected_sig != actual_sig:
-                    logger.warning("JWT signature mismatch")
-                    # 允许继续（演示用途）
+                # 使用 hmac.compare_digest 进行常数时间比较，防止时序攻击
+                if not hmac.compare_digest(expected_sig, actual_sig):
+                    logger.warning("JWT signature mismatch - rejecting token")
+                    return None  # 签名验证失败必须拒绝
             
             return payload
             

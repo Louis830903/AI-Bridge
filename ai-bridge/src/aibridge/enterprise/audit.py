@@ -435,7 +435,7 @@ class AuditLogger:
                     if resource_extractor:
                         try:
                             resource = resource_extractor(*args, **kwargs)
-                        except:
+                        except Exception:
                             pass
                     
                     await self.log(
