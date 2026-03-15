@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from aibridge.adapters.base import BaseAdapter
+from aibridge.adapters.base import BaseAdapter, AdapterInfo, AdapterType
 from aibridge.core.protocol import Action, Response
 
 logger = logging.getLogger(__name__)
@@ -106,9 +106,33 @@ class CLIAdapter(BaseAdapter):
     cli_module: Optional[str] = None
     cli_path: Optional[str] = None
     
+    # Adapter info (override in subclasses)
+    adapter_display_name: str = "CLI Tool"
+    adapter_version: str = "1.0.0"
+    
     # Configuration
     default_timeout: int = 60
     auto_install_cli: bool = False
+    
+    @property
+    def info(self) -> AdapterInfo:
+        """Get adapter metadata."""
+        return AdapterInfo(
+            id=self.cli_name,
+            name=self.adapter_display_name,
+            type=AdapterType.CUSTOM,
+            version=self.adapter_version,
+            actions=self.get_supported_actions(),
+            description=f"CLI adapter for {self.cli_name}"
+        )
+    
+    def get_supported_actions(self) -> List[str]:
+        """Get list of supported actions."""
+        # Try to get from SUPPORTED_ACTIONS class attribute
+        if hasattr(self, 'SUPPORTED_ACTIONS'):
+            return list(self.SUPPORTED_ACTIONS)
+        # Otherwise, find all _handle_* methods
+        return [m.replace('_handle_', '') for m in dir(self) if m.startswith('_handle_')]
 
     def __init__(self, config: Optional[CLIAdapterConfig] = None):
         super().__init__(config)
@@ -134,10 +158,40 @@ class CLIAdapter(BaseAdapter):
             
             self._action_handlers = self._get_action_handlers()
             logger.info(f"CLI adapter initialized: {self.cli_name}")
+            self._connected = True
             return True
         except Exception as e:
             logger.error(f"Failed to initialize CLI adapter: {e}")
             return False
+
+    async def connect(self) -> bool:
+        """
+        Connect to the CLI tool.
+        
+        For CLI adapters, this verifies the tool is available.
+        """
+        return await self.initialize()
+    
+    async def disconnect(self) -> bool:
+        """
+        Disconnect from the CLI tool.
+        
+        For CLI adapters, this cleans up any session state.
+        """
+        self._cli_executable = None
+        self._session_state.clear()
+        self._connected = False
+        return True
+    
+    async def is_available(self) -> bool:
+        """
+        Check if the CLI tool is available.
+        
+        Returns:
+            True if the CLI tool is installed and accessible.
+        """
+        executable = await self._find_cli()
+        return executable is not None
 
     async def _find_cli(self) -> Optional[str]:
         """Find the CLI executable."""
@@ -192,12 +246,72 @@ class CLIAdapter(BaseAdapter):
             logger.error(f"Error installing CLI: {e}")
             return False
 
-    async def execute(self, action: Action) -> Response:
-        """Execute an action by dispatching to the appropriate handler."""
+    async def execute(
+        self,
+        action: str,
+        target: Optional[Dict[str, Any]] = None,
+        value: Optional[Any] = None,
+        options: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute an action on the CLI tool.
+        
+        This method provides compatibility with BaseAdapter interface.
+        
+        Args:
+            action: The action name to perform
+            target: Optional target specification (unused for CLI)
+            value: Primary value for the action
+            options: Additional options/parameters
+            
+        Returns:
+            Response dictionary with keys: success, data, error
+        """
+        if not self._cli_executable:
+            return {
+                "success": False,
+                "error": "CLI adapter not initialized. Call connect() first."
+            }
+        
+        # Build params from value and options
+        params = options.copy() if options else {}
+        if value is not None:
+            params["value"] = value
+        if target:
+            params["target"] = target
+        
+        # Find handler
+        handler = self._action_handlers.get(action)
+        if not handler:
+            handler = getattr(self, f"_handle_{action}", None)
+        
+        if not handler:
+            return {
+                "success": False,
+                "error": f"Unknown action: {action}. Supported: {list(self._action_handlers.keys())}"
+            }
+        
+        try:
+            # Create Action object for internal handlers
+            action_obj = Action(name=action, params=params)
+            response = await handler(action_obj)
+            
+            # Convert Response to dict
+            return {
+                "success": response.success,
+                "data": response.data,
+                "error": response.error
+            }
+        except Exception as e:
+            logger.exception(f"Error executing action {action}")
+            return {"success": False, "error": f"Execution failed: {str(e)}"}
+    
+    async def execute_action(self, action: Action) -> Response:
+        """Execute an action using the internal Action object format."""
         if not self._cli_executable:
             return Response(
-                status=ResponseStatus.ERROR,
-                error="CLI adapter not initialized. Call initialize() first."
+                success=False,
+                error="CLI adapter not initialized. Call connect() first."
             )
         
         handler = self._action_handlers.get(action.name)
@@ -206,7 +320,7 @@ class CLIAdapter(BaseAdapter):
         
         if not handler:
             return Response(
-                status=ResponseStatus.ERROR,
+                success=False,
                 error=f"Unknown action: {action.name}. Supported: {list(self._action_handlers.keys())}"
             )
         
@@ -214,7 +328,7 @@ class CLIAdapter(BaseAdapter):
             return await handler(action)
         except Exception as e:
             logger.exception(f"Error executing action {action.name}")
-            return Response(status=ResponseStatus.ERROR, error=f"Execution failed: {str(e)}")
+            return Response(success=False, error=f"Execution failed: {str(e)}")
 
     @abstractmethod
     def _get_action_handlers(self) -> Dict[str, Callable[[Action], Response]]:

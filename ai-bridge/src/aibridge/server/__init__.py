@@ -23,12 +23,13 @@ Usage:
 """
 
 from .mcp_server import AIBridgeMCPServer, SimpleMCPServer
-from .mcp_tools import MCPToolRegistry, mcp_tool, register_adapter_actions
+from .mcp_tools import MCPToolRegistry, MCPToolsGenerator, mcp_tool, register_adapter_actions
 
 __all__ = [
     "AIBridgeMCPServer",
     "SimpleMCPServer",
     "MCPToolRegistry",
+    "MCPToolsGenerator",
     "mcp_tool",
     "register_adapter_actions",
 ]

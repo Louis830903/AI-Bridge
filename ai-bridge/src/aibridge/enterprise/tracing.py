@@ -658,6 +658,29 @@ class Tracer:
         if len(self._pending_spans) >= self._config.batch_size:
             asyncio.create_task(self._flush())
     
+    def get_finished_spans(self) -> List[Span]:
+        """
+        获取已完成的 Span 列表（用于测试和调试）
+        
+        注意：这会返回待导出的 spans 的副本，不会清空队列。
+        如果需要导出并清空，请使用 flush()。
+        
+        Returns:
+            已完成但未导出的 Span 列表
+        """
+        return list(self._pending_spans)
+    
+    def clear_finished_spans(self) -> int:
+        """
+        清空已完成的 Span 列表（用于测试）
+        
+        Returns:
+            清空的 Span 数量
+        """
+        count = len(self._pending_spans)
+        self._pending_spans = []
+        return count
+    
     async def _flush(self) -> None:
         """刷新待导出的 Spans"""
         async with self._lock:

@@ -340,3 +340,180 @@ def register_adapter_actions(
         
         registry.register(tool)
         logger.info(f"Auto-registered MCP Tool: {tool_name}")
+
+
+class MCPToolsGenerator:
+    """
+    从 AdapterManager 自动生成 MCP Tools。
+    
+    此类提供了一种便捷方式，将 AI-Bridge 适配器的能力自动暴露为 MCP Tool。
+    
+    用法示例:
+        ```python
+        from aibridge.core.manager import AdapterManager
+        from aibridge.server.mcp_tools import MCPToolsGenerator
+        
+        manager = AdapterManager()
+        generator = MCPToolsGenerator(manager)
+        tools = generator.generate_all()
+        
+        # 或者生成特定适配器的工具
+        chrome_tools = generator.generate_for_adapter("chrome")
+        ```
+    """
+    
+    def __init__(self, manager: "AdapterManager" = None):
+        """
+        初始化工具生成器。
+        
+        Args:
+            manager: AdapterManager 实例，如果不提供则按需创建
+        """
+        self._manager = manager
+        self._registry = MCPToolRegistry()
+        self._generated_tools: Dict[str, List[MCPTool]] = {}
+    
+    @property
+    def manager(self):
+        """Lazy load manager."""
+        if self._manager is None:
+            from aibridge.core.manager import AdapterManager
+            self._manager = AdapterManager()
+        return self._manager
+    
+    def generate_for_adapter(
+        self,
+        adapter_id: str,
+        prefix: Optional[str] = None,
+        register: bool = True
+    ) -> List[MCPTool]:
+        """
+        为特定适配器生成 MCP 工具。
+        
+        Args:
+            adapter_id: 适配器 ID
+            prefix: 工具名称前缀（默认使用适配器 ID）
+            register: 是否自动注册到全局注册表
+            
+        Returns:
+            生成的 MCP 工具列表
+        """
+        tools = []
+        prefix = prefix or f"{adapter_id}_"
+        
+        # 获取适配器信息
+        adapters = self.manager.list_adapters()
+        adapter_info = None
+        for a in adapters:
+            if a.get("id") == adapter_id or a.get("name", "").lower() == adapter_id.lower():
+                adapter_info = a
+                break
+        
+        if not adapter_info:
+            logger.warning(f"Adapter not found: {adapter_id}")
+            return tools
+        
+        # 获取适配器支持的动作
+        actions = adapter_info.get("actions", [])
+        
+        for action_name in actions:
+            tool = MCPTool(
+                name=f"{prefix}{action_name}",
+                description=f"Execute {action_name} on {adapter_id}",
+                parameters=[],  # 参数需要从适配器定义获取
+                handler=self._create_action_handler(adapter_id, action_name)
+            )
+            tools.append(tool)
+            
+            if register:
+                self._registry.register(tool)
+        
+        self._generated_tools[adapter_id] = tools
+        return tools
+    
+    def generate_all(
+        self,
+        include_adapters: Optional[List[str]] = None,
+        exclude_adapters: Optional[List[str]] = None,
+        register: bool = True
+    ) -> Dict[str, List[MCPTool]]:
+        """
+        为所有适配器生成 MCP 工具。
+        
+        Args:
+            include_adapters: 要包含的适配器列表（不指定则包含所有）
+            exclude_adapters: 要排除的适配器列表
+            register: 是否自动注册到全局注册表
+            
+        Returns:
+            每个适配器生成的工具字典
+        """
+        all_tools = {}
+        exclude_set = set(exclude_adapters or [])
+        
+        for adapter in self.manager.list_adapters():
+            adapter_id = adapter.get("id", "")
+            
+            # 检查包含/排除
+            if include_adapters and adapter_id not in include_adapters:
+                continue
+            if adapter_id in exclude_set:
+                continue
+            
+            tools = self.generate_for_adapter(adapter_id, register=register)
+            if tools:
+                all_tools[adapter_id] = tools
+        
+        return all_tools
+    
+    def list_generated_tools(self) -> List[dict]:
+        """
+        列出所有已生成的工具的 schema。
+        
+        Returns:
+            工具 schema 列表
+        """
+        return self._registry.list_tools()
+    
+    def get_tool(self, name: str) -> Optional[MCPTool]:
+        """获取工具"""
+        return self._registry.get(name)
+    
+    async def execute_tool(self, name: str, params: dict) -> dict:
+        """执行工具"""
+        return await self._registry.execute(name, params)
+    
+    def _create_action_handler(self, adapter_id: str, action_name: str):
+        """创建动作处理器"""
+        manager = self.manager
+        
+        async def handler(**params):
+            # 获取适配器
+            adapter = await manager.get_adapter(adapter_id)
+            if not adapter:
+                return {"success": False, "error": f"Adapter {adapter_id} not available"}
+            
+            try:
+                # 执行动作
+                result = await adapter.execute(
+                    action=action_name,
+                    target=params.get("target"),
+                    value=params.get("value"),
+                    options=params.get("options")
+                )
+                return {
+                    "success": result.get("success", True) if isinstance(result, dict) else True,
+                    "data": result.get("data") if isinstance(result, dict) else result,
+                    "error": result.get("error") if isinstance(result, dict) else None
+                }
+            except Exception as e:
+                logger.exception(f"Error executing {action_name} on {adapter_id}")
+                return {"success": False, "error": str(e)}
+        
+        handler.__name__ = f"{adapter_id}_{action_name}"
+        return handler
+    
+    @property
+    def registry(self) -> MCPToolRegistry:
+        """获取工具注册表"""
+        return self._registry
