@@ -472,6 +472,12 @@ class Tracer:
         self._lock = asyncio.Lock()
         self._running = False
         self._flush_task: Optional[asyncio.Task] = None
+        
+        # 线程安全的随机数生成器（用于采样）
+        import random
+        import threading
+        self._random = random.Random()
+        self._random_lock = threading.Lock()
     
     def add_exporter(self, exporter: SpanExporter) -> None:
         """添加导出器"""
@@ -509,9 +515,9 @@ class Tracer:
         logger.info("Tracer stopped")
     
     def _should_sample(self) -> bool:
-        """是否采样"""
-        import random
-        return random.random() < self._config.sample_rate
+        """是否采样（线程安全）"""
+        with self._random_lock:
+            return self._random.random() < self._config.sample_rate
     
     def _generate_id(self, length: int = 16) -> str:
         """生成 ID"""

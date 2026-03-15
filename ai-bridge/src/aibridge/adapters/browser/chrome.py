@@ -45,15 +45,59 @@ class ChromeAdapter(BaseAdapter):
         s = s.replace("\x00", "")  # 移除 null 字节
         return s
     
+    # 安全白名单：允许执行的预定义脚本
+    SAFE_SCRIPTS = {
+        "get_title": "document.title",
+        "get_url": "window.location.href",
+        "get_body_text": "document.body?.innerText || ''",
+        "get_links_count": "document.querySelectorAll('a').length",
+        "get_images_count": "document.querySelectorAll('img').length",
+        "get_forms_count": "document.querySelectorAll('form').length",
+        "get_scroll_height": "document.body?.scrollHeight || 0",
+        "get_viewport_height": "window.innerHeight",
+        "is_scrollable": "document.body?.scrollHeight > window.innerHeight",
+    }
+    
+    # 快照缓存最大数量
+    MAX_SNAPSHOT_CACHE = 1000
+    
     def _validate_css_selector(self, selector: str) -> bool:
-        """验证 CSS 选择器是否安全"""
+        """
+        验证 CSS 选择器是否安全
+        
+        检查：
+        - 长度限制（防止 DoS）
+        - 危险字符和模式
+        - 格式有效性
+        """
         if not selector:
             return False
+        
+        # 长度限制
+        if len(selector) > 500:
+            return False
+        
         # 禁止危险字符
-        dangerous = ['<', '>', '{', '}', ';', '`', '\x00']
-        for char in dangerous:
+        dangerous_chars = ['<', '>', '{', '}', ';', '`', '\x00', '\n', '\r', '\t']
+        for char in dangerous_chars:
             if char in selector:
                 return False
+        
+        # 禁止危险模式（不区分大小写）
+        dangerous_patterns = [
+            'javascript:', 'expression(', 'eval(', '@import',
+            'behavior:', 'binding:', 'moz-binding:'
+        ]
+        selector_lower = selector.lower()
+        for pattern in dangerous_patterns:
+            if pattern in selector_lower:
+                return False
+        
+        # 使用正则验证基本 CSS 选择器格式
+        import re
+        if not re.match(r'^[\w\s\[\]\.#:\-\*,>+~="\'()@\^\$\|]+$', selector):
+            return False
+        
         return True
 
 
@@ -448,21 +492,39 @@ class ChromeAdapter(BaseAdapter):
                 return {"success": True}
             
             elif action == "execute":
-                script = value or ""
-                if not script:
-                    return {"success": False, "error": "execute 操作需要提供 JavaScript 代码"}
+                # 安全限制：只允许执行白名单中的预定义脚本
+                script_name = value or ""
+                if not script_name:
+                    return {
+                        "success": False, 
+                        "error": "execute 操作需要提供脚本名称",
+                        "available_scripts": list(self.SAFE_SCRIPTS.keys())
+                    }
+                
+                # 检查是否在白名单中
+                if script_name not in self.SAFE_SCRIPTS:
+                    return {
+                        "success": False,
+                        "error": f"不允许执行任意 JavaScript。可用脚本: {list(self.SAFE_SCRIPTS.keys())}",
+                        "available_scripts": list(self.SAFE_SCRIPTS.keys())
+                    }
+                
                 try:
-                    result = await self._page.evaluate(script)
+                    # 执行白名单中的安全脚本
+                    safe_script = self.SAFE_SCRIPTS[script_name]
+                    result = await self._page.evaluate(safe_script)
+                    
                     # 处理 None 返回值，确保结果可序列化
                     if result is None:
-                        return {"success": True, "data": None, "result_type": "None"}
+                        return {"success": True, "data": None, "script": script_name}
+                    
                     # 处理复杂对象，确保可以 JSON 序列化
                     try:
                         json.dumps(result)
-                        return {"success": True, "data": result, "result_type": type(result).__name__}
+                        return {"success": True, "data": result, "script": script_name}
                     except (TypeError, ValueError):
-                        # 不可序列化的对象转为字符串
-                        return {"success": True, "data": str(result), "result_type": "str"}
+                        return {"success": True, "data": str(result), "script": script_name}
+                        
                 except Exception as e:
                     logger.error(f"JavaScript 执行失败: {e}")
                     return {"success": False, "error": f"JavaScript 执行失败: {str(e)}"}
@@ -674,25 +736,32 @@ class ChromeAdapter(BaseAdapter):
                         "element_count": 0
                     }
             
-            # 为每个元素分配 uid 并缓存
+            # 为每个元素分配 uid 并缓存（带大小限制）
             self._snapshot_elements = {}
             uid_counter = [0]
             
             def assign_uids(node: dict, prefix: str = "") -> dict:
-                """递归为节点分配 uid"""
+                """递归为节点分配 uid，带缓存大小限制"""
                 if not node or not isinstance(node, dict):
                     return node
                 
-                uid = f"{prefix}{uid_counter[0]}"
-                uid_counter[0] += 1
-                node["uid"] = uid
-                
-                # 缓存元素信息
-                self._snapshot_elements[uid] = {
-                    "role": node.get("role"),
-                    "name": node.get("name"),
-                    "value": node.get("value"),
-                }
+                # 检查缓存大小限制
+                if len(self._snapshot_elements) >= self.MAX_SNAPSHOT_CACHE:
+                    # 达到上限，不再缓存新元素但继续分配 uid
+                    uid = f"{prefix}{uid_counter[0]}"
+                    uid_counter[0] += 1
+                    node["uid"] = uid
+                else:
+                    uid = f"{prefix}{uid_counter[0]}"
+                    uid_counter[0] += 1
+                    node["uid"] = uid
+                    
+                    # 缓存元素信息
+                    self._snapshot_elements[uid] = {
+                        "role": node.get("role"),
+                        "name": node.get("name"),
+                        "value": node.get("value"),
+                    }
                 
                 if "children" in node and isinstance(node["children"], list):
                     for child in node["children"]:
@@ -1081,41 +1150,50 @@ class ChromeAdapter(BaseAdapter):
             if not selector:
                 return {"success": False, "error": "extract 需要提供 css selector"}
             
+            # 安全验证选择器
+            if not self._validate_css_selector(selector):
+                return {"success": False, "error": f"不安全的 CSS 选择器: {selector}"}
+            
             # 等待元素出现
             await self._page.wait_for_selector(selector, state="attached", timeout=timeout)
             
-            # 构建提取脚本
+            # 使用参数化调用，避免 JS 注入
             if schema:
-                # 根据 schema 提取指定字段
+                # 根据 schema 提取指定字段，使用安全的参数化方式
                 fields = list(schema.keys())
-                js_code = f"""
-                    () => {{
-                        const elements = document.querySelectorAll('{selector}');
-                        const results = [];
-                        elements.forEach((el, idx) => {{
-                            const item = {{}};
-                            {self._build_extraction_js(fields)}
-                            results.push(item);
-                        }});
-                        return {'results' if multiple else 'results[0] || {}'};
-                    }}
-                """
-                data = await self._page.evaluate(js_code)
+                # 验证字段名安全性
+                safe_fields = [f for f in fields if f.isalnum() or f.replace('_', '').isalnum()]
+                
+                data = await self._page.evaluate(
+                    """(selector, fields, multiple) => {
+                        const elements = document.querySelectorAll(selector);
+                        const results = Array.from(elements).map(el => {
+                            const item = {};
+                            fields.forEach(field => {
+                                const dataEl = el.querySelector(`[data-field=${field}]`);
+                                item[field] = dataEl?.innerText || el.getAttribute(field) || '';
+                            });
+                            return item;
+                        });
+                        return multiple ? results : (results[0] || {});
+                    }""",
+                    selector, safe_fields, multiple
+                )
             else:
-                # 默认提取文本和属性
-                js_code = f"""
-                    () => {{
-                        const elements = document.querySelectorAll('{selector}');
-                        const results = Array.from(elements).map(el => ({{
+                # 默认提取文本和属性，使用参数化调用
+                data = await self._page.evaluate(
+                    """(selector, multiple) => {
+                        const elements = document.querySelectorAll(selector);
+                        const results = Array.from(elements).map(el => ({
                             text: el.innerText?.trim() || '',
                             html: el.innerHTML?.slice(0, 500) || '',
                             href: el.href || el.getAttribute('href') || '',
                             src: el.src || el.getAttribute('src') || ''
-                        }}));
-                        return {'results' if multiple else 'results[0] || {}'};
-                    }}
-                """
-                data = await self._page.evaluate(js_code)
+                        }));
+                        return multiple ? results : (results[0] || {});
+                    }""",
+                    selector, multiple
+                )
             
             # 构建统一返回格式
             return {
@@ -1140,8 +1218,6 @@ class ChromeAdapter(BaseAdapter):
             }
     
     def _build_extraction_js(self, fields):
-        """根据字段列表构建 JS 提取代码"""
-        code_lines = []
-        for field in fields:
-            code_lines.append(f"item['{field}'] = el.querySelector('[data-field={field}]')?.innerText || el.getAttribute('{field}') || '';")
-        return "\n                            ".join(code_lines)
+        """根据字段列表构建 JS 提取代码（已废弃，保留向后兼容）"""
+        # 该方法已不再使用，改用参数化调用
+        return ""

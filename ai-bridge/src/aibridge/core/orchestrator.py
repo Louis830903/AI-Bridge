@@ -420,6 +420,9 @@ class Orchestrator:
         # 运行中的图
         self._running_graphs: Dict[str, TaskGraph] = {}
         
+        # 取消事件（用于实际取消异步任务）
+        self._cancel_events: Dict[str, asyncio.Event] = {}
+        
         # 统计
         self._stats = {
             "executions": 0,
@@ -464,11 +467,19 @@ class Orchestrator:
         # 标记运行中
         self._running_graphs[graph.graph_id] = graph
         
+        # 创建取消事件
+        self._cancel_events[graph.graph_id] = asyncio.Event()
+        
         try:
             # 按层执行
             layers = graph.get_execution_layers()
             
             for layer in layers:
+                # 检查是否已取消
+                if self._cancel_events[graph.graph_id].is_set():
+                    logger.info(f"Graph {graph.graph_id} was cancelled")
+                    break
+                
                 # 检查是否需要提前终止
                 if graph.fail_fast:
                     failed = [t for t in graph.tasks.values() if t.state == TaskState.FAILED]
@@ -510,7 +521,11 @@ class Orchestrator:
             )
             
         finally:
-            del self._running_graphs[graph.graph_id]
+            # 清理运行状态
+            if graph.graph_id in self._running_graphs:
+                del self._running_graphs[graph.graph_id]
+            if graph.graph_id in self._cancel_events:
+                del self._cancel_events[graph.graph_id]
     
     async def _execute_layer(
         self,
@@ -638,10 +653,15 @@ class Orchestrator:
         
         graph = self._running_graphs[graph_id]
         
+        # 设置取消事件，通知执行中的任务
+        if graph_id in self._cancel_events:
+            self._cancel_events[graph_id].set()
+        
         # 将所有未完成任务标记为取消
         for task in graph.tasks.values():
             if task.state in (TaskState.PENDING, TaskState.READY, TaskState.RUNNING):
                 task.state = TaskState.CANCELLED
+                task.error = "任务已被取消"
         
         logger.info(f"Graph {graph_id} cancelled")
         return True

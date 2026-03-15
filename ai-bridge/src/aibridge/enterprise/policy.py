@@ -50,6 +50,10 @@ class PolicyCondition:
     operator: str               # 操作符 (eq, ne, gt, lt, in, contains)
     value: Any                  # 期望值
     
+    # 正则表达式安全限制
+    MAX_REGEX_LENGTH = 100
+    MAX_REGEX_QUANTIFIERS = 3
+    
     def evaluate(self, context: Dict[str, Any]) -> bool:
         """评估条件"""
         # 获取实际值
@@ -79,9 +83,47 @@ class PolicyCondition:
         elif self.operator == "endswith":
             return str(actual).endswith(str(self.value))
         elif self.operator == "regex":
-            return bool(re.match(self.value, str(actual)))
+            return self._safe_regex_match(str(self.value), str(actual))
         
         return False
+    
+    def _safe_regex_match(self, pattern: str, text: str) -> bool:
+        """
+        安全的正则表达式匹配，防止 ReDoS 攻击
+        
+        检查：
+        - 模式长度限制
+        - 量词数量限制
+        - 编译错误处理
+        """
+        try:
+            # 长度限制
+            if len(pattern) > self.MAX_REGEX_LENGTH:
+                logger.warning(f"Regex pattern too long: {len(pattern)} > {self.MAX_REGEX_LENGTH}")
+                return False
+            
+            # 检查危险量词数量（防止 ReDoS）
+            quantifier_count = pattern.count('*') + pattern.count('+') + pattern.count('?')
+            if quantifier_count > self.MAX_REGEX_QUANTIFIERS:
+                logger.warning(f"Regex has too many quantifiers: {quantifier_count}")
+                return False
+            
+            # 检查嵌套量词（如 (a+)+ 或 (a*)*）
+            nested_pattern = re.compile(r'\([^)]*[*+][^)]*\)[*+]')
+            if nested_pattern.search(pattern):
+                logger.warning("Regex has dangerous nested quantifiers")
+                return False
+            
+            # 编译并匹配
+            compiled = re.compile(pattern)
+            return bool(compiled.match(text))
+            
+        except re.error as e:
+            logger.warning(f"Invalid regex pattern: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Regex evaluation error: {e}")
+            return False
     
     def _get_value(self, context: Dict[str, Any], key: str) -> Any:
         """从上下文获取值"""

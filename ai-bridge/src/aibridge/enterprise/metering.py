@@ -13,6 +13,7 @@
 """
 
 import asyncio
+import hashlib
 import logging
 import time
 import uuid
@@ -23,6 +24,11 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+def _hash_user_id(user_id: str) -> str:
+    """哈希用户 ID 用于日志脱敏"""
+    return hashlib.sha256(user_id.encode()).hexdigest()[:8]
 
 
 class MeteringDimension(Enum):
@@ -885,7 +891,11 @@ class QuotaManager:
         
         if current >= limit:
             check_result["exceeded"] = True
-            logger.warning(f"Quota exceeded: user={user_id}, type={quota_type}, current={current}, limit={limit}")
+            # 使用哈希 ID 脱敏日志
+            logger.warning(
+                f"Quota exceeded: user_hash={_hash_user_id(user_id)}, "
+                f"type={quota_type}, usage_pct={round(usage_pct * 100, 1)}%"
+            )
         elif usage_pct >= warning_threshold:
             check_result["warning"] = True
             # 触发告警回调

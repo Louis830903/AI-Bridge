@@ -252,6 +252,80 @@ class AIBridgeMCPServer:
             }
         return None
     
+    def _validate_url(self, url: str) -> tuple[bool, str]:
+        """
+        验证 URL 安全性
+        
+        检查：
+        - URL 存在性
+        - 协议限制 (http/https)
+        - 主机名有效性
+        
+        Returns:
+            (is_valid, error_message)
+        """
+        from urllib.parse import urlparse
+        
+        if not url:
+            return False, "URL 不能为空"
+        
+        if not isinstance(url, str):
+            return False, "URL 必须是字符串"
+        
+        # 长度限制
+        if len(url) > 2048:
+            return False, "URL 过长"
+        
+        try:
+            parsed = urlparse(url)
+            
+            # 只允许 http/https
+            if parsed.scheme not in ('http', 'https'):
+                return False, f"不支持的协议: {parsed.scheme}，只允许 http/https"
+            
+            # 检查主机名
+            if not parsed.netloc:
+                return False, "URL 缺少主机名"
+            
+            return True, ""
+            
+        except Exception as e:
+            return False, f"URL 解析错误: {e}"
+    
+    def _validate_selector(self, selector: str) -> tuple[bool, str]:
+        """验证 CSS 选择器安全性"""
+        if not selector:
+            return True, ""  # 空选择器允许（可能使用其他定位方式）
+        
+        if not isinstance(selector, str):
+            return False, "选择器必须是字符串"
+        
+        # 长度限制
+        if len(selector) > 500:
+            return False, "选择器过长"
+        
+        # 禁止危险字符
+        dangerous = ['<', '>', '{', '}', ';', '`', '\x00', '\n', '\r']
+        for char in dangerous:
+            if char in selector:
+                return False, f"选择器包含不允许的字符: {repr(char)}"
+        
+        # 禁止危险模式
+        dangerous_patterns = ['javascript:', 'expression(', 'eval(']
+        selector_lower = selector.lower()
+        for pattern in dangerous_patterns:
+            if pattern in selector_lower:
+                return False, f"选择器包含不允许的模式: {pattern}"
+        
+        return True, ""
+    
+    def _validate_wait_until(self, wait_until: str) -> tuple[bool, str]:
+        """验证 wait_until 参数"""
+        allowed = ["load", "domcontentloaded", "networkidle"]
+        if wait_until not in allowed:
+            return False, f"无效的 wait_until 值: {wait_until}，允许值: {allowed}"
+        return True, ""
+    
     async def handle_navigate(self, args: dict) -> dict:
         """处理导航请求"""
         # 空指针保护
@@ -260,6 +334,16 @@ class AIBridgeMCPServer:
         
         url = args.get("url")
         wait_until = args.get("wait_until", "domcontentloaded")
+        
+        # URL 验证
+        valid, err = self._validate_url(url)
+        if not valid:
+            return {"success": False, "error": err}
+        
+        # wait_until 验证
+        valid, err = self._validate_wait_until(wait_until)
+        if not valid:
+            return {"success": False, "error": err}
         
         result = await self.adapter.execute(
             "goto",
@@ -288,6 +372,11 @@ class AIBridgeMCPServer:
         
         selector = args.get("selector")
         text = args.get("text")
+        
+        # 选择器验证
+        valid, err = self._validate_selector(selector)
+        if not valid:
+            return {"success": False, "error": err}
         force = args.get("force", False)
         
         target = {}
@@ -319,11 +408,20 @@ class AIBridgeMCPServer:
         text = args.get("text")
         force = args.get("force", False)
         
+        # 选择器验证
+        valid, err = self._validate_selector(selector)
+        if not valid:
+            return {"success": False, "error": err}
+        
+        # 文本验证
+        if text is not None and not isinstance(text, str):
+            return {"success": False, "error": "输入文本必须是字符串"}
+        
         result = await self.adapter.execute(
             "type",
             target={"css": selector},
             value=text,
-            options={"force": force}
+            options={"force": bool(force)}
         )
         
         return {
@@ -342,11 +440,20 @@ class AIBridgeMCPServer:
         fields = args.get("fields", {})
         multiple = args.get("multiple", False)
         
+        # 选择器验证
+        valid, err = self._validate_selector(selector)
+        if not valid:
+            return {"success": False, "error": err}
+        
+        # fields 验证
+        if fields is not None and not isinstance(fields, dict):
+            return {"success": False, "error": "fields 必须是字典"}
+        
         result = await self.adapter.execute(
             "extract",
             target={"css": selector},
             value=fields,
-            options={"multiple": multiple}
+            options={"multiple": bool(multiple)}
         )
         
         return {
@@ -439,11 +546,33 @@ class AIBridgeMCPServer:
         
         try:
             return await handler(arguments)
-        except Exception as e:
-            logger.error(f"Error handling tool {tool_name}: {e}")
+        except ValueError as e:
+            # 参数验证错误，可以安全返回
+            logger.warning(f"Validation error in {tool_name}: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": f"参数验证失败: {e}"
+            }
+        except TimeoutError as e:
+            # 超时错误
+            logger.warning(f"Timeout in {tool_name}: {e}")
+            return {
+                "success": False,
+                "error": "操作超时，请重试"
+            }
+        except ConnectionError as e:
+            # 连接错误
+            logger.error(f"Connection error in {tool_name}: {e}")
+            return {
+                "success": False,
+                "error": "浏览器连接失败，请检查连接状态"
+            }
+        except Exception as e:
+            # 其他异常，记录详细日志但不返回内部信息
+            logger.error(f"Unexpected error handling tool {tool_name}: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": "内部错误，请稍后重试"
             }
     
     def get_tools(self) -> List[dict]:
