@@ -1,5 +1,4 @@
-"""
-企业级特性 - 安全与治理模块
+"""企业级特性 - 安全与治理模块
 
 提供统一的认证、授权、审计、限流等企业级能力。
 
@@ -15,6 +14,8 @@
 v5.0 新增：
 - prometheus: Prometheus 指标导出
 - metering_prometheus: Metering-Prometheus 适配
+- audit_log: 审计日志持久化 (多后端支持)
+- mcp_discovery: MCP Server 动态发现
 """
 
 from .auth import (
@@ -109,6 +110,36 @@ from .metering_prometheus import (
     create_metering_prometheus_adapter,
 )
 
+# v5.0: Audit Log 持久化
+from .audit_log import (
+    AuditAction as AuditActionV2,
+    AuditLevel as AuditLevelV2,
+    AuditEntry,
+    AuditQuery,
+    AuditQueryResult,
+    AuditStorageBackend,
+    MemoryAuditStorage,
+    FileAuditStorage,
+    SQLiteAuditStorage,
+    AuditLogger as AuditLoggerV2,
+    create_memory_audit_logger,
+    create_file_audit_logger,
+    create_sqlite_audit_logger,
+)
+
+# v5.0: MCP Server 动态发现
+from .mcp_discovery import (
+    ServerStatus,
+    TransportType,
+    MCPServerConfig,
+    DiscoverySource,
+    ConfigFileWatcher,
+    MCPServerDiscovery,
+    MCPConnectionPool,
+    discover_from_claude_desktop,
+    discover_from_env,
+)
+
 __all__ = [
     # Auth
     "AuthMiddleware",
@@ -190,4 +221,28 @@ __all__ = [
     "MeteringPrometheusAdapter",
     "MeteringHook",
     "create_metering_prometheus_adapter",
+    # Audit Log Persistence (v5.0)
+    "AuditActionV2",
+    "AuditLevelV2",
+    "AuditEntry",
+    "AuditQuery",
+    "AuditQueryResult",
+    "AuditStorageBackend",
+    "MemoryAuditStorage",
+    "FileAuditStorage",
+    "SQLiteAuditStorage",
+    "AuditLoggerV2",
+    "create_memory_audit_logger",
+    "create_file_audit_logger",
+    "create_sqlite_audit_logger",
+    # MCP Server Discovery (v5.0)
+    "ServerStatus",
+    "TransportType",
+    "MCPServerConfig",
+    "DiscoverySource",
+    "ConfigFileWatcher",
+    "MCPServerDiscovery",
+    "MCPConnectionPool",
+    "discover_from_claude_desktop",
+    "discover_from_env",
 ]
