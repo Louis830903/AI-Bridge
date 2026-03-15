@@ -50,7 +50,15 @@
 ## 📢 What's New | 最新动态
 
 ```diff
-🎉 v3.0.0 - Protocol Gateway Architecture!
+🎉 v4.0.0 - Enterprise Management Layer!
++ Policy Engine - Tool-level access control (PBAC)
++ Metering System - Usage tracking and cost estimation
++ Distributed Tracing - OpenTelemetry compatible tracing
++ Multi-Agent Orchestrator - DAG-based task scheduling
++ Protocol Bridge Enhancement - Bidirectional MCP ↔ A2A conversion
++ 473+ Tests - Comprehensive test coverage
+
+🔧 v3.0.0 - Protocol Gateway Architecture!
 + MCP + A2A Dual Protocol Gateway - Unified entry point for AI tools
 + Browser Connector - Proxy to mature MCP Servers (Browser Use, Chrome DevTools, Playwright)
 + Protocol Bridge - MCP ↔ A2A interoperability  
@@ -108,8 +116,10 @@ Any AI Tool → AI-Bridge Gateway → MCP or A2A Protocol
 | 🌐 | **Browser Connector** | Proxy to Browser Use, Chrome DevTools MCP, Playwright MCP |
 | 🛠️ | **CLI Tool Adapters** | FFmpeg, Pandoc, yt-dlp, ImageMagick, Blender, SoX, Prettier, Docker |
 | 📊 | **Office Suite** | Word, Excel, PowerPoint, WPS Office |
-| 🔐 | **Enterprise Features** | Auth middleware, Audit logging, Rate limiting |
-| 🧠 | **Multi-Agent** | A2A protocol for agent collaboration |
+| 🔐 | **Enterprise Features** | Auth, Audit, Rate limiting, Policy-based access control |
+| 📊 | **Metering & Quota** | Usage tracking, cost estimation, quota management |
+| 🔍 | **Distributed Tracing** | OpenTelemetry compatible, cross-service tracing |
+| 🧠 | **Multi-Agent** | A2A protocol, DAG orchestrator for agent collaboration |
 
 </div>
 
@@ -211,13 +221,19 @@ asyncio.run(main())
                      │ MCP / A2A Protocol
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              AI-Bridge v3.0 Protocol Gateway                 │
+│              AI-Bridge v4.0 Protocol Gateway                 │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │             Enterprise Management Layer (v4.0)            │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │  │
+│  │  │  Policy  │ │ Metering │ │ Tracing  │ │Orchestrator│ │  │
+│  │  │  Engine  │ │ Collector│ │  (OTel)  │ │   (DAG)  │ │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ │  │
+│  └─────────────────────────────────────────────────────────┘  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
 │  │ MCP Registry │  │ A2A Gateway  │  │Protocol Bridge│      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  Enterprise  │  │   Service    │  │   Session    │      │
-│  │   Features   │  │  Discovery   │  │   Manager    │      │
+│  │     Auth     │  │    Audit     │  │ Rate Limiter │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 └────────────────────┬────────────────────────────────────────┘
                      │
@@ -267,6 +283,57 @@ asyncio.run(main())
 ---
 
 ## 🔐 Enterprise Features
+
+### v4.0 - Enterprise Management Layer
+
+```python
+from aibridge.enterprise import (
+    PolicyEngine, ToolPolicy, PolicyEffect, PolicyAction,  # Access Control
+    MeteringCollector, QuotaManager, QuotaConfig,          # Usage Metering
+    Tracer, TracerConfig, SpanKind,                        # Distributed Tracing
+)
+from aibridge.core import TaskGraph, Orchestrator          # Multi-Agent
+
+# 1. Policy-Based Access Control (PBAC)
+policy_engine = PolicyEngine()
+policy = ToolPolicy(
+    policy_id="dev-policy",
+    name="Developer Policy",
+    statements=[{
+        "sid": "allow-browser",
+        "effect": "allow",
+        "actions": ["tool:call"],
+        "resources": ["browser/*"],
+    }]
+)
+policy_engine.register_policy(policy)
+result = policy_engine.evaluate("user1", PolicyAction.CALL_TOOL, "browser/navigate")
+
+# 2. Usage Metering & Quota
+metering = MeteringCollector()
+await metering.start()
+await metering.record(user_id="user1", tool_name="browser/navigate", duration_ms=100)
+stats = await metering.get_user_stats("user1", "day")
+
+quota = QuotaManager(metering)
+quota.set_user_quota("user1", QuotaConfig(max_calls_per_day=1000))
+await quota.check_quota("user1")  # Raises QuotaExceeded if over limit
+
+# 3. Distributed Tracing (OpenTelemetry Compatible)
+tracer = Tracer(TracerConfig(service_name="my-service"))
+with tracer.start_as_current_span("tool_call", kind=SpanKind.SERVER) as span:
+    span.set_attribute("user.id", "user1")
+    # ... execute tool
+    span.set_status(SpanStatus.OK)
+
+# 4. Multi-Agent Orchestration
+graph = TaskGraph(name="research-workflow")
+t1 = graph.add_task("search", "search-agent", "web_search")
+t2 = graph.add_task("analyze", "analyzer-agent", "analyze", depends_on={t1.task_id})
+result = await orchestrator.execute(graph)
+```
+
+### v3.0 - Basic Enterprise Features
 
 ```python
 from aibridge.enterprise import AuthMiddleware, AuditLogger, RateLimiter

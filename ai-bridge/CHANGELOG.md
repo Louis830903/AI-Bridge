@@ -10,6 +10,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - TBD
 
+## [4.0.0] - 2026-03-15
+
+### Added
+- **Enterprise Management Layer** - Complete enterprise-grade capabilities
+- **Policy Engine (PBAC)** - Tool-level permission control with deny/allow rules
+  - Role-based policies with wildcard pattern matching
+  - Real-time policy evaluation with audit logging
+  - Support for conditions and context-aware access control
+- **Metering System** - Call cost tracking and quota management
+  - Per-tool cost configuration with custom pricing
+  - User/tenant quota limits with automatic enforcement
+  - Usage statistics and billing integration support
+- **Distributed Tracing** - OpenTelemetry-compatible tracing
+  - Span hierarchy with parent-child relationships
+  - Multiple exporters (Console, InMemory, extensible)
+  - Automatic context propagation across service boundaries
+- **Multi-Agent Orchestrator** - DAG-based task execution engine
+  - TaskGraph with dependency resolution and cycle detection
+  - Parallel execution with configurable concurrency
+  - Task state management (PENDING, RUNNING, COMPLETED, FAILED, CANCELLED)
+  - Agent registry for dynamic agent discovery
+- **Protocol Bridge Enhancement** - Bidirectional MCP ↔ A2A conversion
+  - Full message type mapping between protocols
+  - Streaming support for both directions
+  - Error and status code translation
+
+### Changed
+- Architecture upgraded to support enterprise workloads
+- Test coverage expanded to 473+ test cases
+
+### Fixed
+- KeyError in orchestrator validate() when dependencies reference non-existent tasks
+
 ## [2.6.1] - 2026-03-13
 
 ### Added
