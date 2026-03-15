@@ -58,12 +58,17 @@
 ## 📢 What's New | 最新动态
 
 ```diff
-🎉 v2.6.0 Released! 
-+ MCP Server Support - Connect any MCP-compatible AI
-+ O-R-A Loop Orchestrator - Intelligent task planning
-+ Shared LLM Architecture - Efficient AI resource usage
-+ Intent Recognition Engine - Natural language to actions
-+ Session Management & Smart Wait
+🎉 v3.0.0 Released - Protocol Gateway Architecture!
++ MCP + A2A Dual Protocol Gateway - Connect any AI tool
++ Browser Connector - Proxy to mature MCP Servers (Browser Use, Chrome DevTools, Playwright)
++ Protocol Bridge - MCP ↔ A2A interoperability
++ Service Discovery - Health check and auto-failover
++ JSON-RPC over STDIO - Full MCP protocol implementation
+
+🗓️ v2.6.0 (Previous)
+  MCP Server Support - Connect any MCP-compatible AI
+  O-R-A Loop Orchestrator - Intelligent task planning
+  Shared LLM Architecture - Efficient AI resource usage
 ```
 
 ---
@@ -109,14 +114,15 @@ AI → MCP Protocol → AI-Bridge → Native API
 
 | | Feature | Description |
 |---|---------|-------------|
+| 🔗 | **Protocol Gateway** | MCP + A2A dual protocol support, unified entry point |
 | 🤖 | **Universal AI Support** | Claude, GPT, Qwen, Gemini, OpenClaw, any MCP-compatible AI |
+| 🌐 | **Browser Connector** | Proxy to Browser Use, Chrome DevTools MCP, Playwright MCP |
 | 💬 | **13 IM Platforms** | WhatsApp, Telegram, Slack, Teams, Discord, Feishu, DingTalk, WeCom, LINE, Viber, Messenger, KakaoTalk, Google Chat |
 | 📊 | **Office Suite** | Word, Excel, PowerPoint, WPS Office |
 | 🖥️ | **Desktop Apps** | Any Windows app via UI Automation |
-| 🌐 | **Browser Automation** | Chrome, Edge with A11y tree snapshots |
 | 🎯 | **Semantic Matching** | 15+ platforms, intent-based actions |
 | 🔄 | **O-R-A Loop** | Observe-Reason-Action intelligent planning |
-| 🧠 | **MCP Protocol** | Model Context Protocol compatible |
+| 🧠 | **Multi-Agent** | A2A protocol for agent collaboration |
 
 </div>
 
@@ -138,6 +144,40 @@ pip install ai-bridge[all]
 ```
 
 ### 3-Minute Example
+
+**v3.0 - Protocol Gateway (Recommended)**
+
+```python
+import asyncio
+from aibridge.connectors.mcp import BrowserConnector, BrowserConnectorConfig
+from aibridge.connectors.mcp.browser import BrowserBackend
+
+async def main():
+    # 1. Create browser connector (auto-select available backend)
+    config = BrowserConnectorConfig(
+        name="browser",
+        backend=BrowserBackend.AUTO,  # Browser Use, Chrome DevTools, or Playwright
+        headless=True,
+    )
+    connector = BrowserConnector(config)
+    
+    async with connector:
+        # 2. Navigate to website
+        await connector.navigate("https://www.google.com")
+        
+        # 3. Type in search box
+        await connector.type("input[name=q]", "AI-Bridge MCP")
+        
+        # 4. Click search button
+        await connector.click("input[name=btnK]")
+        
+        # 5. Take screenshot
+        await connector.screenshot("result.png")
+
+asyncio.run(main())
+```
+
+**v2.x - Direct Adapter (Still Supported)**
 
 ```python
 import asyncio

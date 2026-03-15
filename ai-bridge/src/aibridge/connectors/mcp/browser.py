@@ -23,6 +23,7 @@ from ..base import (
     ConnectorError,
     ToolInfo,
 )
+from aibridge.gateway.mcp_protocol import MCPProtocol, MCPTool
 
 logger = logging.getLogger(__name__)
 
@@ -111,12 +112,17 @@ class BrowserConnector(MCPConnector):
         super().__init__(config)
         self._browser_config = config
         self._active_backend: Optional[BrowserBackend] = None
-        self._process: Optional[asyncio.subprocess.Process] = None
+        self._mcp: Optional[MCPProtocol] = None  # MCP 协议通信
     
     @property
     def active_backend(self) -> Optional[BrowserBackend]:
         """当前使用的后端"""
         return self._active_backend
+    
+    @property
+    def mcp_protocol(self) -> Optional[MCPProtocol]:
+        """MCP 协议实例"""
+        return self._mcp
     
     async def _detect_available_backend(self) -> Optional[BrowserBackend]:
         """检测可用的后端"""
@@ -173,14 +179,11 @@ class BrowserConnector(MCPConnector):
             if not await self._is_backend_available(self._active_backend):
                 raise ConnectorError(f"Backend {self._active_backend.value} is not available")
         
-        # 启动后端
+        # 启动后端并初始化 MCP 协议
         await self._start_backend(self._active_backend)
-        
-        # 初始化工具列表
-        self._tools = self._get_standard_tools()
     
     async def _start_backend(self, backend: BrowserBackend) -> None:
-        """启动指定后端"""
+        """启动指定后端并完成 MCP 协议握手"""
         config = BACKEND_CONFIGS[backend]
         
         logger.info(f"Starting browser backend: {backend.value}")
@@ -198,49 +201,51 @@ class BrowserConnector(MCPConnector):
         if self._browser_config.user_data_dir:
             env["USER_DATA_DIR"] = self._browser_config.user_data_dir
         
-        # 启动进程
-        self._process = await asyncio.create_subprocess_exec(
-            config["command"],
-            *config["args"],
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        # 创建 MCP 协议实例
+        self._mcp = MCPProtocol(timeout=self._config.timeout)
+        
+        # 启动 MCP Server 进程
+        await self._mcp.start(
+            command=config["command"],
+            args=config["args"],
             env=env,
         )
         
-        logger.info(f"Browser backend started with PID: {self._process.pid}")
-        
-        # TODO: 实现 MCP 协议握手
-        # 等待后端启动完成
-        await asyncio.sleep(2.0)
+        # MCP 协议握手
+        try:
+            server_info = await self._mcp.initialize()
+            logger.info(f"MCP Server initialized: {server_info.name} v{server_info.version}")
+            
+            # 获取工具列表
+            mcp_tools = await self._mcp.list_tools()
+            self._tools = [
+                ToolInfo(
+                    name=t.name,
+                    description=t.description,
+                    input_schema=t.input_schema,
+                )
+                for t in mcp_tools
+            ]
+            logger.info(f"Got {len(self._tools)} tools from MCP Server")
+            
+        except Exception as e:
+            # 如果握手失败，回退到标准工具列表
+            logger.warning(f"MCP handshake failed, using standard tools: {e}")
+            self._tools = self._get_standard_tools()
     
     async def _do_stop(self) -> None:
         """停止浏览器后端"""
-        if self._process:
-            self._process.terminate()
-            try:
-                await asyncio.wait_for(self._process.wait(), timeout=10.0)
-            except asyncio.TimeoutError:
-                self._process.kill()
-                await self._process.wait()
-            self._process = None
-            self._active_backend = None
+        if self._mcp:
+            await self._mcp.shutdown()
+            self._mcp = None
+        self._active_backend = None
     
     async def _do_call_tool(self, name: str, params: Dict[str, Any]) -> Any:
-        """调用浏览器工具"""
-        if not self._process:
-            raise ConnectorError("Browser backend not started")
+        """通过 MCP 协议调用工具"""
+        if not self._mcp:
+            raise ConnectorError("MCP protocol not initialized")
         
-        # TODO: 实现 MCP 协议调用
-        # 这里需要实现实际的 MCP stdin/stdout 通信
-        
-        # 临时实现：记录调用
-        logger.info(f"Calling browser tool: {name} with params: {params}")
-        
-        raise NotImplementedError(
-            f"MCP protocol call not implemented yet. "
-            f"Tool: {name}, Backend: {self._active_backend}"
-        )
+        return await self._mcp.call_tool(name, params)
     
     def _get_standard_tools(self) -> List[ToolInfo]:
         """获取标准浏览器工具列表"""
