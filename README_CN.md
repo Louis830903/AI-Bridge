@@ -204,6 +204,22 @@ python -m aibridge init
 }
 ```
 
+### Docker 部署
+
+```bash
+# 构建并运行
+docker build -t aibridge ./ai-bridge
+docker run -p 9090:9090 aibridge
+
+# 启用监控栈 (Prometheus + Grafana)
+cd ai-bridge
+GRAFANA_ADMIN_PASSWORD=你的强密码 docker-compose --profile monitoring up -d
+
+# 访问:
+# - Prometheus 指标: http://localhost:9090/metrics
+# - Grafana 面板:    http://localhost:3000 (admin / 你的强密码)
+```
+
 ### v3.0 协议网关使用
 
 ```python

@@ -178,6 +178,22 @@ Add to your Claude Desktop config:
 }
 ```
 
+### Docker Deployment
+
+```bash
+# Build and run
+docker build -t aibridge ./ai-bridge
+docker run -p 9090:9090 aibridge
+
+# With monitoring stack (Prometheus + Grafana)
+cd ai-bridge
+GRAFANA_ADMIN_PASSWORD=your-secure-password docker-compose --profile monitoring up -d
+
+# Access:
+# - Prometheus Metrics: http://localhost:9090/metrics
+# - Grafana Dashboard:  http://localhost:3000 (admin / your-secure-password)
+```
+
 ### v3.0 - Protocol Gateway
 
 ```python

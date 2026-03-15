@@ -7,9 +7,9 @@ AI-Bridge 环境诊断工具
 import sys
 import os
 import shutil
-import asyncio
 import platform
-from typing import Tuple, List, Optional
+import urllib.request
+from typing import List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
@@ -195,9 +195,9 @@ class DoctorCommand:
         try:
             import win32com.client
             # 尝试检测 Word
+            word = None
             try:
                 word = win32com.client.Dispatch("Word.Application")
-                word.Quit()
                 return CheckResult(
                     name="Microsoft Office",
                     status=CheckStatus.OK,
@@ -205,11 +205,17 @@ class DoctorCommand:
                 )
             except Exception:
                 pass
+            finally:
+                if word:
+                    try:
+                        word.Quit()
+                    except Exception:
+                        pass
             
             # 尝试检测 WPS
+            wps = None
             try:
                 wps = win32com.client.Dispatch("Kwps.Application")
-                wps.Quit()
                 return CheckResult(
                     name="WPS Office",
                     status=CheckStatus.OK,
@@ -217,6 +223,12 @@ class DoctorCommand:
                 )
             except Exception:
                 pass
+            finally:
+                if wps:
+                    try:
+                        wps.Quit()
+                    except Exception:
+                        pass
             
             return CheckResult(
                 name="Office 套件",
@@ -279,7 +291,6 @@ class DoctorCommand:
     
     def check_network(self) -> CheckResult:
         """检查网络连接"""
-        import urllib.request
         try:
             urllib.request.urlopen("https://www.baidu.com", timeout=5)
             return CheckResult(
@@ -298,8 +309,9 @@ class DoctorCommand:
     def check_disk_space(self) -> CheckResult:
         """检查磁盘空间"""
         try:
-            import shutil
-            total, used, free = shutil.disk_usage("/")
+            # Windows 使用当前驱动器，Linux/Mac 使用根目录
+            check_path = os.path.splitdrive(os.getcwd())[0] + os.sep if platform.system() == "Windows" else "/"
+            total, used, free = shutil.disk_usage(check_path)
             free_gb = free // (1024 ** 3)
             
             if free_gb < 1:

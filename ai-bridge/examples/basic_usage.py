@@ -88,8 +88,8 @@ async def example_browser_automation():
 
 
 async def example_gateway_browser():
-    """v3.0 协议网关 - 浏览器连接器示例"""
-    print("\n=== v3.0 协议网关 - Browser Connector ===\n")
+    """v5.0 协议网关 - 浏览器连接器示例"""
+    print("\n=== v5.0 协议网关 - Browser Connector ===\n")
     
     from aibridge.connectors.mcp import BrowserConnector, BrowserConnectorConfig
     from aibridge.connectors.mcp.browser import BrowserBackend
@@ -154,7 +154,7 @@ async def example_office_word():
         result = await adapter.execute(
             action="write",
             target=None,
-            value="AI-Bridge v3.0 协议网关报告\n\n这是一份由 AI-Bridge 自动生成的文档。",
+            value="AI-Bridge v5.0 协议网关报告\n\n这是一份由 AI-Bridge 自动生成的文档。",
             options={}
         )
         print(f"✓ 写入内容: {result}")
@@ -174,8 +174,8 @@ async def example_office_word():
 
 
 async def example_a2a_gateway():
-    """v3.0 A2A Gateway Agent 协作示例"""
-    print("\n=== v3.0 A2A Gateway Agent 协作 ===\n")
+    """v5.0 A2A Gateway Agent 协作示例"""
+    print("\n=== v5.0 A2A Gateway Agent 协作 ===\n")
     
     from aibridge.gateway import (
         A2AGateway,
@@ -225,8 +225,8 @@ async def example_a2a_gateway():
 
 
 async def example_mcp_registry():
-    """v3.0 MCP Registry 示例"""
-    print("\n=== v3.0 MCP Registry ===\n")
+    """v5.0 MCP Registry 示例"""
+    print("\n=== v5.0 MCP Registry ===\n")
     
     from aibridge.gateway import MCPRegistry, MCPServerConfig
     from aibridge.gateway.mcp_registry import MCPTransport
@@ -269,10 +269,10 @@ def main():
     # 选择要运行的示例
     examples = {
         "1": ("浏览器自动化 (Direct Adapter)", example_browser_automation),
-        "2": ("v3.0 Browser Connector", example_gateway_browser),
+        "2": ("v5.0 Browser Connector", example_gateway_browser),
         "3": ("Word 文档", example_office_word),
-        "4": ("v3.0 A2A Gateway", example_a2a_gateway),
-        "5": ("v3.0 MCP Registry", example_mcp_registry),
+        "4": ("v5.0 A2A Gateway", example_a2a_gateway),
+        "5": ("v5.0 MCP Registry", example_mcp_registry),
     }
     
     print("\n可用示例:")

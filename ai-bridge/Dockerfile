@@ -49,8 +49,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制依赖文件
+# 复制项目文件（先复制源码，再安装）
 COPY pyproject.toml ./
+COPY src/ ./src/
+COPY examples/ ./examples/
 
 # 安装 Python 依赖
 RUN pip install --upgrade pip && \
@@ -58,10 +60,6 @@ RUN pip install --upgrade pip && \
 
 # 安装 Playwright 浏览器
 RUN playwright install chromium --with-deps
-
-# 复制源代码
-COPY src/ ./src/
-COPY examples/ ./examples/
 
 # 创建非 root 用户
 RUN useradd -m -u 1000 aibridge && \

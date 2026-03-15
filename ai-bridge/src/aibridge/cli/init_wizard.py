@@ -1,12 +1,17 @@
-"""
-AI-Bridge 配置向导
+"""AI-Bridge 配置向导
 
 交互式引导用户生成配置文件。
 """
 
-import os
 import sys
 from typing import Dict, Any
+
+# 尝试导入 yaml
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
 
 
 def run_init_wizard(output: str = "config.yaml") -> int:
@@ -36,6 +41,11 @@ def run_init_wizard(output: str = "config.yaml") -> int:
     except (EOFError, KeyboardInterrupt):
         print("\n已取消")
         return 1
+    
+    # 验证输入
+    if choice not in ["1", "2", "3", "4"]:
+        print(f"  ⚠️  无效选择 '{choice}'，使用默认值 4")
+        choice = "4"
     
     if choice in ["1", "4"]:
         config["adapters"]["chrome"] = {
@@ -87,12 +97,9 @@ def run_init_wizard(output: str = "config.yaml") -> int:
     print()
     
     # 生成配置文件
-    import yaml
-    
-    # 如果没有 yaml，使用简单格式
-    try:
+    if HAS_YAML:
         yaml_content = yaml.dump(config, allow_unicode=True, default_flow_style=False, sort_keys=False)
-    except NameError:
+    else:
         # 手动生成 YAML
         yaml_content = _generate_yaml(config)
     

@@ -8,7 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- TBD
+- `ai-bridge doctor` - 环境诊断命令，一键检查依赖和配置
+- `ai-bridge init` - 交互式配置向导，快速生成配置文件
+- Docker 支持 - Dockerfile 和 docker-compose.yml
+- Prometheus + Grafana 可选监控栈
+
+### Fixed
+- Dockerfile 构建顺序错误，先复制源码再执行 pip install
+- Office 检测中 COM 对象资源泄漏，添加 finally 块确保资源释放
+- init_wizard.py yaml 导入异常处理逻辑错误
+- Windows 上磁盘空间检测路径错误（现在使用当前驱动器）
+- init_wizard 用户输入无效值时缺少提示
+- basic_usage.py 版本号不一致（统一为 v5.0）
+- 未使用的导入和重复导入问题
+
+### Security
+- docker-compose Grafana 密码改为环境变量配置 `${GRAFANA_ADMIN_PASSWORD:-admin}`
 
 ## [4.0.0] - 2026-03-15
 
