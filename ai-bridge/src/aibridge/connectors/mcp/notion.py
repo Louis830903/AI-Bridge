@@ -6,11 +6,13 @@ Notion 连接器
 
 使用示例：
 ```python
+import os
 from aibridge.connectors.mcp import NotionConnector, NotionConnectorConfig
 
+# WARNING: 生产环境请使用环境变量，不要硬编码凭证
 config = NotionConnectorConfig(
     name="notion",
-    api_key="secret_xxx"  # Notion Integration Token
+    api_key=os.environ.get("NOTION_API_KEY")  # 从环境变量读取
 )
 
 async with NotionConnector(config) as notion:

@@ -374,7 +374,7 @@ async def main():
         browser = await p.chromium.launch()
         page = await browser.new_page()
         await page.goto("{url}")
-        await page.evaluate("window.scrollTo({x}, {y})")
+        await page.evaluate("([x, y]) => window.scrollTo(x, y)", [{x}, {y}])
         await browser.close()
 
 asyncio.run(main())

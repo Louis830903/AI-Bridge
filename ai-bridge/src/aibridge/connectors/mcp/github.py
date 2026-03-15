@@ -60,9 +60,12 @@ class GitHubConnector(MCPConnector):
     
     使用示例：
     ```python
+    import os
+    
+    # WARNING: 生产环境请使用环境变量，不要硬编码凭证
     config = GitHubConnectorConfig(
         name="github",
-        token="ghp_xxxxxxxxxxxx",
+        token=os.environ.get("GITHUB_TOKEN"),  # 从环境变量读取
         default_owner="myorg",
         default_repo="myrepo"
     )

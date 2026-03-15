@@ -80,7 +80,7 @@ class SecurityAuditor:
             for file in files:
                 if file.endswith('.py'):
                     filepath = os.path.join(root, file)
-                    with open(filepath, 'r') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         lines = f.readlines()
                     
                     for i, line in enumerate(lines, 1):
@@ -119,12 +119,12 @@ class SecurityAuditor:
             for file in files:
                 if file.endswith('.py'):
                     filepath = os.path.join(root, file)
-                    with open(filepath, 'r') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         content = f.read()
                     
                     # 检查是否导入 sqlite3/mysql 等
                     if 'sqlite' in content or 'mysql' in content or 'psycopg' in content:
-                        with open(filepath, 'r') as f:
+                        with open(filepath, 'r', encoding='utf-8') as f:
                             lines = f.readlines()
                         
                         for i, line in enumerate(lines, 1):
@@ -158,7 +158,7 @@ class SecurityAuditor:
             for file in files:
                 if file.endswith('.py'):
                     filepath = os.path.join(root, file)
-                    with open(filepath, 'r') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         lines = f.readlines()
                     
                     for i, line in enumerate(lines, 1):
@@ -210,7 +210,7 @@ class SecurityAuditor:
             for file in files:
                 if file.endswith('.py'):
                     filepath = os.path.join(root, file)
-                    with open(filepath, 'r') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         lines = f.readlines()
                     
                     for i, line in enumerate(lines, 1):
@@ -247,7 +247,7 @@ class SecurityAuditor:
             for file in files:
                 if file.endswith('.py'):
                     filepath = os.path.join(root, file)
-                    with open(filepath, 'r') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         lines = f.readlines()
                     
                     for i, line in enumerate(lines, 1):
@@ -286,7 +286,7 @@ class SecurityAuditor:
             for file in files:
                 if file.endswith('.py'):
                     filepath = os.path.join(root, file)
-                    with open(filepath, 'r') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         content = f.read()
                     
                     # 检查 open() 但没有 with 语句
@@ -316,7 +316,7 @@ class SecurityAuditor:
             for file in files:
                 if file.endswith('.py'):
                     filepath = os.path.join(root, file)
-                    with open(filepath, 'r') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         content = f.read()
                     
                     # 检查 while True 没有 break
@@ -353,7 +353,7 @@ class SecurityAuditor:
             for file in files:
                 if file.endswith('.py'):
                     filepath = os.path.join(root, file)
-                    with open(filepath, 'r') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         lines = f.readlines()
                     
                     for i, line in enumerate(lines, 1):
@@ -381,7 +381,7 @@ class SecurityAuditor:
             for file in files:
                 if file.endswith('.py'):
                     filepath = os.path.join(root, file)
-                    with open(filepath, 'r') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         content = f.read()
                     
                     # 检查网络请求没有超时

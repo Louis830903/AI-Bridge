@@ -6,11 +6,13 @@ Slack 连接器
 
 使用示例：
 ```python
+import os
 from aibridge.connectors.mcp import SlackConnector, SlackConnectorConfig
 
+# WARNING: 生产环境请使用环境变量，不要硬编码凭证
 config = SlackConnectorConfig(
     name="slack",
-    bot_token="xoxb-xxx"  # Slack Bot Token
+    bot_token=os.environ.get("SLACK_BOT_TOKEN")  # 从环境变量读取
 )
 
 async with SlackConnector(config) as slack:

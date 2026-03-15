@@ -6,11 +6,13 @@ Firecrawl 连接器
 
 使用示例：
 ```python
+import os
 from aibridge.connectors.mcp import FirecrawlConnector, FirecrawlConnectorConfig
 
+# WARNING: 生产环境请使用环境变量，不要硬编码凭证
 config = FirecrawlConnectorConfig(
     name="crawler",
-    api_key="fc-xxx"  # Firecrawl API Key
+    api_key=os.environ.get("FIRECRAWL_API_KEY")  # 从环境变量读取
 )
 
 async with FirecrawlConnector(config) as crawler:

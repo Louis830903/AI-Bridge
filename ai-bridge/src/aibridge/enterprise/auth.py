@@ -332,13 +332,16 @@ class AuthMiddleware:
     
     使用示例：
     ```python
+    import os
+    
+    # WARNING: 生产环境请使用环境变量，不要硬编码凭证
     config = AuthConfig(
         enabled=True,
         api_keys={
-            "sk-12345": "admin",
-            "sk-67890": "viewer",
+            os.environ.get("API_KEY_ADMIN", ""): "admin",
+            os.environ.get("API_KEY_VIEWER", ""): "viewer",
         },
-        jwt_secret="my-secret-key"
+        jwt_secret=os.environ.get("JWT_SECRET", "")  # 必须设置强密钥
     )
     
     middleware = AuthMiddleware(config)
