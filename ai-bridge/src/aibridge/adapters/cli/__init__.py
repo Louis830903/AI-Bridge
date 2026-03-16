@@ -40,6 +40,9 @@ _BUILTIN_ADAPTERS = {
     "sox": ("aibridge.adapters.cli.sox", "SoXAdapter"),
     "prettier": ("aibridge.adapters.cli.prettier", "PrettierAdapter"),
     "docker": ("aibridge.adapters.cli.docker", "DockerAdapter"),
+    # Office CLI adapters
+    "wps": ("aibridge.adapters.cli.wps", "WPSCLIAdapter"),
+    "libreoffice": ("aibridge.adapters.cli.libreoffice", "LibreOfficeAdapter"),
 }
 
 # Try to import each built-in adapter

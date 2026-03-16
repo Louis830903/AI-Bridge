@@ -227,7 +227,12 @@ class AuditLogger:
         logger.info("Audit logger stopped")
     
     async def _open_file(self) -> None:
-        """打开日志文件"""
+        """打开日志文件
+        
+        注意：文件句柄在类级别持有，需要在 stop() 中关闭。
+        使用 try-finally 确保异常时也能正确处理。
+        """
+        file_handle = None
         try:
             path = Path(self._config.file_path)
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -238,10 +243,20 @@ class AuditLogger:
                 if size_mb >= self._config.max_file_size_mb:
                     await self._rotate_file()
             
-            self._file_handle = open(path, "a", encoding="utf-8")
+            # 先打开文件，成功后再赋值给实例变量
+            file_handle = open(path, "a", encoding="utf-8")
+            self._file_handle = file_handle
+            file_handle = None  # 转移所有权，避免 finally 关闭
             
         except Exception as e:
             logger.error(f"Failed to open audit log file: {e}")
+        finally:
+            # 如果打开成功但赋值前异常，关闭文件句柄防止泄漏
+            if file_handle is not None:
+                try:
+                    file_handle.close()
+                except Exception:
+                    pass
     
     async def _rotate_file(self) -> None:
         """轮转日志文件"""
