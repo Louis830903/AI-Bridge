@@ -1,178 +1,50 @@
 <div align="center">
 
-<!-- 动态 Logo -->
 <img src="docs/assets/social-preview.png" alt="AI-Bridge Banner" width="800"/>
 
 <br/><br/>
 
-<!-- 核心 Slogan - 震撼开场 -->
 # 🌉 AI-Bridge
 
-### **From Chat to Action**
-### **让 AI 从聊天走向行动**
+### *让 AI 从聊天走向行动 — 一行代码，操控任意桌面软件*
 
 <br/>
 
 <p>
-  <strong>🚀 一行代码，AI 操控任意桌面软件</strong><br/>
-  <strong>🚀 One line of code. AI controls any desktop app.</strong>
-</p>
-
-<br/>
-
-<!-- 徽章墙 -->
-<p>
-  <a href="https://github.com/Louis830903/AI-Bridge/stargazers">
-    <img src="https://img.shields.io/github/stars/Louis830903/AI-Bridge?style=for-the-badge&logo=github&color=yellow&label=Star" alt="Stars">
-  </a>
   <a href="https://github.com/Louis830903/AI-Bridge/releases">
-    <img src="https://img.shields.io/github/v/release/Louis830903/AI-Bridge?style=for-the-badge&color=blue&label=版本" alt="Release">
+    <img src="https://img.shields.io/github/v/release/Louis830903/AI-Bridge?style=for-the-badge&color=8B5CF6&label=v1.0.0" alt="Release">
+  </a>
+  <a href="https://github.com/Louis830903/AI-Bridge/stargazers">
+    <img src="https://img.shields.io/github/stars/Louis830903/AI-Bridge?style=for-the-badge&logo=github&color=F59E0B&label=Star" alt="Stars">
   </a>
   <a href="https://python.org">
-    <img src="https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+    <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
   </a>
   <a href="https://modelcontextprotocol.io">
-    <img src="https://img.shields.io/badge/MCP-兼容-00D084?style=for-the-badge&logo=anthropic&logoColor=white" alt="MCP">
+    <img src="https://img.shields.io/badge/MCP_+_A2A-双协议-00D084?style=for-the-badge&logo=anthropic&logoColor=white" alt="Protocol">
   </a>
 </p>
 
 <p>
-  <a href="https://github.com/Louis830903/AI-Bridge/actions">
-    <img src="https://img.shields.io/badge/测试-647%20通过-success?style=flat-square" alt="Tests">
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/badge/许可证-Apache%202.0-blue.svg?style=flat-square" alt="License">
-  </a>
-  <a href="https://github.com/Louis830903/AI-Bridge/pulls">
-    <img src="https://img.shields.io/badge/PR-欢迎-brightgreen?style=flat-square" alt="PRs">
-  </a>
+  <img src="https://img.shields.io/badge/测试-929_通过-success?style=flat-square&logo=pytest" alt="Tests">
+  <img src="https://img.shields.io/badge/覆盖率-42%25-blue?style=flat-square" alt="Coverage">
+  <img src="https://img.shields.io/badge/CI-铁幕_防御-ef4444?style=flat-square&logo=githubactions" alt="CI">
+  <img src="https://img.shields.io/badge/许可证-Apache_2.0-blue?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/PR-欢迎-brightgreen?style=flat-square" alt="PRs">
 </p>
 
 <br/>
 
-<!-- 导航 -->
 <p>
   <a href="README.md">🇺🇸 English</a> •
-  <a href="#-30-秒演示">⚡ 30秒演示</a> •
-  <a href="#-使用场景">🎯 使用场景</a> •
+  <a href="#-为什么选择-ai-bridge">🔥 为什么</a> •
+  <a href="#-30-秒演示">⚡ 演示</a> •
   <a href="#-快速开始">🚀 快速开始</a> •
-  <a href="#️-系统架构">🏗️ 系统架构</a>
+  <a href="#️-系统架构">🏗️ 架构</a> •
+  <a href="#-企业级功能">🔐 企业级</a>
 </p>
 
 </div>
-
----
-
-<br/>
-
-<!-- Demo GIF 展示区 -->
-<div align="center">
-
-## ⚡ 30 秒演示
-
-<!-- 演示代码 -->
-<table>
-<tr>
-<td align="center">
-
-```python
-import asyncio
-from aibridge.adapters.browser.chrome import ChromeAdapter
-
-async def main():
-    # 1. 初始化浏览器
-    adapter = ChromeAdapter({"headless": False})
-    await adapter.connect()
-    
-    # 2. 打开网页
-    await adapter.execute("goto", value="https://github.com")
-    
-    # 3. 截图保存
-    await adapter.execute("screenshot", options={"path": "github.png"})
-    
-    await adapter.disconnect()
-
-asyncio.run(main())
-```
-
-</td>
-</tr>
-</table>
-
-**☝️ AI 自动：打开 Chrome → 访问 GitHub → 截图保存**
-
-</div>
-
-<br/>
-
----
-
-## 🎯 使用场景
-
-<table>
-<tr>
-<td width="25%" align="center">
-
-### 🎬 自动剪辑视频
-
-```
-"把这个视频剪成30秒，
-加上背景音乐，
-导出1080p"
-     ↓
-AI-Bridge + FFmpeg
-     ↓
-✅ 几秒搞定
-```
-
-</td>
-<td width="25%" align="center">
-
-### 📊 自动生成报告
-
-```
-"从 Excel 取销售数据，
-生成图表，
-做成 PPT 报告"
-     ↓
-AI-Bridge + Office
-     ↓
-✅ 专业报告
-```
-
-</td>
-<td width="25%" align="center">
-
-### 🌐 网页自动化
-
-```
-"登录网站，
-抓取商品信息，
-存入数据库"
-     ↓
-AI-Bridge + Chrome
-     ↓
-✅ 数据入库
-```
-
-</td>
-<td width="25%" align="center">
-
-### 🤖 多 Agent 协作
-
-```
-"搜集 AI 新闻，
-分析趋势，
-发送摘要到 Slack"
-     ↓
-AI-Bridge + A2A
-     ↓
-✅ Agent 协作
-```
-
-</td>
-</tr>
-</table>
 
 ---
 
@@ -182,30 +54,29 @@ AI-Bridge + A2A
 <tr>
 <td width="50%">
 
-### ❌ 以前：AI 只能聊天
-
+### ❌ 没有 AI-Bridge
 ```
-用户："帮我剪辑视频"
-AI：  "我做不到，但我可以告诉你
-       怎么手动操作..."
+用户："帮我生成月度销售 PPT"
+AI：  "我无法操作 Office。
+       这是你可以手动运行的
+       Python 代码..."
 ```
 
-**AI 只能输出文字** 😞
+**AI 只是一个高级搜索引擎** 😞
 
 </td>
 <td width="50%">
 
-### ✅ 现在：AI 直接行动
-
+### ✅ 有了 AI-Bridge
 ```
-用户："帮我剪辑视频"
-AI：  *打开 FFmpeg*
-      *处理视频*
-      *导出结果*
-      "搞定！视频在这里"
+用户："帮我生成月度销售 PPT"
+AI：  *打开 Excel → 读取数据*
+      *在 PPT 中生成图表*
+      *自动排版美化*
+      "搞定！已保存到 monthly-report.pptx"
 ```
 
-**AI 真正干活** 🚀
+**AI 成为你的数字员工** 🚀
 
 </td>
 </tr>
@@ -215,64 +86,102 @@ AI：  *打开 FFmpeg*
 
 <div align="center">
 
-### ⚡ 背后的魔法
+### ⚡ 核心桥梁
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│    你的 AI      │     │   AI-Bridge     │     │    任意软件     │
-│ (Claude, GPT)   │ ──▶ │      网关       │ ──▶ │ Chrome, Office  │
-│                 │ MCP │                 │     │ FFmpeg, Docker  │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+```mermaid
+graph LR
+    A[🤖 你的 AI<br/>Claude / GPT / Gemini] -->|MCP 协议| B[🌉 AI-Bridge<br/>v1.0.0 网关]
+    B -->|原生适配器| C[🌐 Chrome / Edge]
+    B -->|原生适配器| D[📊 Word / Excel / PPT]
+    B -->|原生适配器| E[🎬 FFmpeg / Blender]
+    B -->|原生适配器| F[🐳 Docker / Git]
+    B -->|MCP 生态| G[🔗 Firecrawl / Slack]
+    B -->|A2A 协议| H[🤖 其他 AI Agent]
 ```
 
 </div>
 
 ---
 
-## 🚀 快速开始
+## ⚡ 30 秒演示
 
-### 1️⃣ 安装
+```python
+import asyncio
+from aibridge.adapters.browser.chrome import ChromeAdapter
 
-```bash
-pip install ai-bridge
-```
+async def main():
+    adapter = ChromeAdapter({"headless": False})
+    await adapter.connect()
+    
+    await adapter.execute("goto", value="https://github.com")
+    await adapter.execute("screenshot", options={"path": "github.png"})
+    
+    await adapter.disconnect()
 
-### 2️⃣ 配置 Claude Desktop
-
-```json
-{
-  "mcpServers": {
-    "ai-bridge": {
-      "command": "python",
-      "args": ["-m", "aibridge"]
-    }
-  }
-}
-```
-
-### 3️⃣ 搞定！让 Claude 帮你：
-
-```
-"打开 Chrome 截图 github.com"
-"把这个视频转成 MP3"
-"用这些数据生成 Excel 报告"
+asyncio.run(main())
+# ☝️ AI 自动打开浏览器 → 访问网站 → 截图 — 只需 3 行代码！
 ```
 
 ---
 
 ## 🛠️ 支持的工具
 
+| 分类 | 工具 | 适配方式 |
+|:---:|---|---|
+| 🌐 **浏览器** | Chrome, Edge | Playwright 驱动，全自动化 |
+| 📊 **办公** | Word, Excel, PowerPoint, WPS | OpenXML / Win32 / LibreOffice |
+| 🎬 **媒体** | FFmpeg, ImageMagick, Blender, Shotcut, SoX, GIMP | CLI 原生，40+ 编码 |
+| 📄 **文档** | Pandoc | 40+ 格式互转 |
+| 🎵 **下载** | yt-dlp | 1000+ 网站支持 |
+| 🐳 **开发** | Docker, Git, Prettier | 基础设施即代码 |
+| 🔗 **MCP 生态** | Browser Use, Firecrawl, Notion, Slack, GitHub | 无缝互通 |
+| 🧠 **AI** | Aider (代码助手) | AI 辅助开发 |
+
+---
+
+## 🚀 快速开始
+
+```bash
+# 1. 安装
+pip install ai-bridge
+
+# 2. 配置 Claude Desktop (claude_desktop_config.json)
+# {
+#   "mcpServers": {
+#     "ai-bridge": {
+#       "command": "python",
+#       "args": ["-m", "aibridge"]
+#     }
+#   }
+# }
+
+# 3. 对 Claude 说：
+# "打开 Chrome，搜索 AI 最新动态，截图保存"
+# "把 report.docx 转成 PDF 并发送邮件"
+# "从数据库拉最新数据，生成 Excel 图表"
+```
+
+---
+
+## 🛡️ 铁幕测试金字塔
+
 <div align="center">
 
-| 分类 | 工具 |
-|:----:|------|
-| 🌐 **浏览器** | Chrome, Edge (Playwright 驱动) |
-| 📊 **办公** | Word, Excel, PowerPoint, WPS |
-| 🎬 **媒体** | FFmpeg, ImageMagick, Blender, SoX |
-| 📄 **文档** | Pandoc (40+ 格式) |
-| 🎵 **下载** | yt-dlp (1000+ 网站) |
-| 🐳 **开发** | Docker, Prettier |
-| 🔗 **MCP 生态** | Browser Use, Firecrawl, Notion, Slack, GitHub |
+```
+           ┌─── L3 E2E (8) ───┐      ← --e2e 标志, 夜间 CI
+         ┌── L2 集成 (7) ──┐        ← --integration, Docker-in-Docker
+       ┌─── L1 组件 (22) ───┐       ← 默认运行, 关键接口
+     ┌────── L0 单元 (907) ──────┐  ← 默认运行, 核心逻辑
+    └────────────────────────────┘
+        929 测试 | 42% 覆盖率
+```
+
+| 层级 | 数量 | 类型 | 触发条件 |
+|:---:|:---:|---|---|
+| L3 | 8 | 端到端 | `--e2e` / 夜间定时 |
+| L2 | 7 | Git + Office 集成 | `--integration` / Docker |
+| L1 | 22 | 意图/编排/桥接/PBAC | 始终运行 |
+| L0 | 907 | 单元+核心+企业级 | 始终运行 |
 
 </div>
 
@@ -280,120 +189,131 @@ pip install ai-bridge
 
 ## 🏗️ 系统架构
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         AI 助手                                  │
-│               (Claude, GPT, 千问, Gemini 等)                     │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ MCP / A2A 协议
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   AI-Bridge v5.0 网关                            │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  v5.0 协议扩展层                                           │  │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌─────────┐ │  │
-│  │  │Agent Card  │ │ Prometheus │ │ A2A 流式   │ │MCP 发现 │ │  │
-│  │  └────────────┘ └────────────┘ └────────────┘ └─────────┘ │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  v4.0 企业管理层                                           │  │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌─────────┐ │  │
-│  │  │  策略引擎  │ │  计量采集  │ │  分布追踪  │ │ DAG编排 │ │  │
-│  │  └────────────┘ └────────────┘ └────────────┘ └─────────┘ │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐    │
-│  │ MCP 注册中心 │  │  A2A 网关   │  │    协议桥接器      │    │
-│  └──────────────┘  └──────────────┘  └────────────────────┘    │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-        ┌───────────────────┼───────────────────┬──────────────────┐
-        ▼                   ▼                   ▼                  ▼
-   ┌─────────┐         ┌─────────┐         ┌─────────┐       ┌─────────┐
-   │ 浏览器  │         │  办公   │         │   CLI   │       │   MCP   │
-   │ 适配器  │         │ 适配器  │         │  适配器 │       │  生态   │
-   └─────────┘         └─────────┘         └─────────┘       └─────────┘
-        │                   │                   │                  │
-   Chrome/Edge          Word/Excel         FFmpeg/Docker      Firecrawl
-                        PowerPoint         yt-dlp/Pandoc      Notion/Slack
+```mermaid
+graph TB
+    subgraph AI["🤖 AI 助手层"]
+        Claude["Claude / GPT / Gemini"]
+    end
+
+    subgraph Gateway["🌉 AI-Bridge v1.0.0 网关"]
+        direction TB
+        subgraph Proto["协议层"]
+            MCP_Reg["MCP 注册中心"]
+            A2A_GW["A2A 网关"]
+            Bridge["协议桥接器<br/>MCP ↔ A2A"]
+        end
+        subgraph Enterprise["企业层"]
+            Policy["PBAC<br/>策略引擎"]
+            Meter["计量<br/>配额+计费"]
+            Trace["追踪<br/>OpenTelemetry"]
+            Audit["审计<br/>合规日志"]
+        end
+        subgraph Core["核心引擎"]
+            Intent["意图引擎<br/>三级解析"]
+            DAG["编排器<br/>DAG 调度"]
+            Session["会话<br/>管理器"]
+        end
+    end
+
+    subgraph Adapters["🔌 适配器层"]
+        Browser["🌐 浏览器<br/>Chrome·Edge"]
+        Office["📊 办公<br/>Word·Excel·PPT"]
+        CLI["💻 CLI<br/>FFmpeg·Docker·Git"]
+        MCP_Eco["🔗 MCP 生态<br/>Firecrawl·Slack"]
+    end
+
+    AI -->|MCP / A2A| Gateway
+    Gateway --> Adapters
 ```
 
 ---
 
-## 📊 企业级功能
+## 🔐 企业级功能
 
-<details>
-<summary><b>🔐 策略访问控制 (PBAC)</b></summary>
+<details open>
+<summary><b>🛡️ PBAC — 策略访问控制</b></summary>
 
 ```python
 from aibridge.enterprise import PolicyEngine, ToolPolicy
 
-policy_engine = PolicyEngine()
-policy = ToolPolicy(
-    policy_id="dev-policy",
+engine = PolicyEngine()
+engine.register_policy(ToolPolicy(
+    policy_id="数据团队",
     statements=[{
         "effect": "allow",
         "actions": ["tool:call"],
-        "resources": ["browser/*", "ffmpeg/*"],
+        "resources": ["browser/*", "office/excel:*"],
     }]
-)
-policy_engine.register_policy(policy)
+))
+result = engine.evaluate("小明", "tool:call", "browser/navigate")
+# ✅ 允许
 ```
-
 </details>
 
 <details>
-<summary><b>📈 使用量计量与配额</b></summary>
+<summary><b>📊 计量 — 使用量追踪与配额</b></summary>
 
 ```python
 from aibridge.enterprise import MeteringCollector, QuotaManager
 
 metering = MeteringCollector()
-await metering.record(user_id="user1", tool_name="browser/navigate")
+await metering.record(user_id="user1", tool="browser/navigate")
 
 quota = QuotaManager(metering)
 quota.set_user_quota("user1", QuotaConfig(max_calls_per_day=1000))
 ```
-
 </details>
 
 <details>
-<summary><b>🔍 分布式追踪 (OpenTelemetry)</b></summary>
+<summary><b>🔍 OpenTelemetry — 分布式链路追踪</b></summary>
 
 ```python
 from aibridge.enterprise import Tracer, TracerConfig
 
-tracer = Tracer(TracerConfig(service_name="my-service"))
+tracer = Tracer(TracerConfig(service_name="网关"))
 with tracer.start_as_current_span("tool_call") as span:
     span.set_attribute("user.id", "user1")
-    # ... 执行工具
 ```
-
 </details>
 
 <details>
-<summary><b>🤖 多 Agent 编排</b></summary>
+<summary><b>🤖 多 Agent DAG 编排</b></summary>
 
 ```python
 from aibridge.core import TaskGraph, Orchestrator
 
-graph = TaskGraph(name="research-workflow")
-t1 = graph.add_task("search", "search-agent", "web_search")
-t2 = graph.add_task("analyze", "analyzer-agent", depends_on={t1.task_id})
-result = await orchestrator.execute(graph)
-```
+graph = TaskGraph(name="研究流程")
+t1 = graph.add_task("搜索", "web-agent", "search")
+t2 = graph.add_task("分析", "nlp-agent", "analyze", depends_on={t1})
+t3 = graph.add_task("报告", "write-agent", "report", depends_on={t2})
 
+result = await orchestrator.execute(graph)
+# ✅ 3 个 Agent DAG 协作，结果自动流转
+```
 </details>
 
 ---
 
-## 📖 文档
+## 📊 性能基准
+
+| 基准测试 | 目标 | 实际 | 状态 |
+|---|---|---|---|
+| L1 意图匹配 (60 模式) | < 100ms | ~0.3ms | ✅ |
+| L1 无匹配遍历 | < 200ms | ~0.4ms | ✅ |
+| 适配器冷启动 | < 2000ms | ~1.0ms | ✅ |
+| 批量注册 (60 模式) | ≥ 50 | 60 | ✅ |
+
+---
+
+## 📖 文档与资源
 
 | 资源 | 链接 |
-|------|------|
+|---|---|
 | 📚 快速入门 | [examples/basic_usage.py](ai-bridge/examples/basic_usage.py) |
 | 🏗️ 网关演示 | [examples/gateway_demo.py](ai-bridge/examples/gateway_demo.py) |
 | 📋 更新日志 | [CHANGELOG.md](ai-bridge/CHANGELOG.md) |
 | 🤝 参与贡献 | [CONTRIBUTING.md](ai-bridge/CONTRIBUTING.md) |
+| 🛡️ 安全工具 | [SECURITY_TOOLS.md](ai-bridge/tools/SECURITY_TOOLS.md) |
 
 ---
 
@@ -407,30 +327,13 @@ result = await orchestrator.execute(graph)
 
 ---
 
-## 🤝 参与贡献
-
-欢迎贡献代码！请查看 [CONTRIBUTING.md](ai-bridge/CONTRIBUTING.md)。
-
-```bash
-git clone https://github.com/Louis830903/AI-Bridge.git
-cd AI-Bridge/ai-bridge
-pip install -e ".[dev]"
-pytest tests/ -v
-```
-
----
-
-## 📄 许可证
-
-Apache 2.0 — 详见 [LICENSE](LICENSE)
-
----
-
 <div align="center">
+
+<br/>
 
 ### 🙏 致谢
 
-[Playwright](https://playwright.dev/) • [MCP](https://modelcontextprotocol.io/) • [A2A](https://google.github.io/a2a-spec/) • [所有贡献者](https://github.com/Louis830903/AI-Bridge/graphs/contributors) ❤️
+[Playwright](https://playwright.dev/) • [MCP](https://modelcontextprotocol.io/) • [A2A](https://google.github.io/a2a-spec/) • [OpenTelemetry](https://opentelemetry.io/) • [所有贡献者](https://github.com/Louis830903/AI-Bridge/graphs/contributors) ❤️
 
 <br/>
 
@@ -438,7 +341,7 @@ Apache 2.0 — 详见 [LICENSE](LICENSE)
 
 <br/>
 
-**如果 AI-Bridge 帮到了你，请给个 ⭐ 支持一下！**
+**如果 AI-Bridge 帮到了你，请给个 ⭐ 支持！**
 
 <br/>
 
