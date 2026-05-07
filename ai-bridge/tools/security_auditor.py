@@ -9,11 +9,15 @@ import sys
 import re
 import json
 import ast
+import logging
 import subprocess
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
+
+
+logger = logging.getLogger(__name__)
 
 REPO_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -40,8 +44,8 @@ class SecurityAuditor:
         
     def audit_all(self) -> List[SecurityIssue]:
         """执行完整的安全审计"""
-        print("🔍 开始完整安全审计...")
-        print("="*70)
+        logger.info("开始完整安全审计...")
+        logger.info("="*70)
         
         # 各种安全检查
         self.check_js_injection()
@@ -62,7 +66,7 @@ class SecurityAuditor:
     
     def check_js_injection(self):
         """检查 JavaScript 注入漏洞"""
-        print("\n[1/13] 检查 JS 注入漏洞...")
+        logger.info("[1/13] 检查 JS 注入漏洞...")
         
         # 只检测真正危险的 JS 代码模式，排除字符串常量
         patterns = [
@@ -113,11 +117,11 @@ class SecurityAuditor:
                                     ))
         
         count = len([i for i in self.issues if i.category == "JS Injection"])
-        print(f"  发现 {count} 个潜在 JS 注入风险")
+        logger.info(f"  发现 {count} 个潜在 JS 注入风险")
     
     def check_sql_injection(self):
         """检查 SQL 注入漏洞"""
-        print("\n[2/13] 检查 SQL 注入漏洞...")
+        logger.info("[2/13] 检查 SQL 注入漏洞...")
         
         patterns = [
             (r'execute\s*\([f\"\'].*\{.*\}.*[\"\']', "SQL 字符串插值"),
@@ -155,11 +159,11 @@ class SecurityAuditor:
                                     ))
                                     count += 1
         
-        print(f"  发现 {count} 个潜在 SQL 注入风险")
+        logger.info(f"  发现 {count} 个潜在 SQL 注入风险")
     
     def check_command_injection(self):
         """检查命令注入漏洞"""
-        print("\n[3/13] 检查命令注入漏洞...")
+        logger.info("[3/13] 检查命令注入漏洞...")
         
         # 真正危险的函数（排除 asyncio.create_subprocess_exec 等安全 API）
         dangerous_functions = [
@@ -201,11 +205,11 @@ class SecurityAuditor:
                                 ))
                                 count += 1
         
-        print(f"  发现 {count} 个潜在命令注入风险")
+        logger.info(f"  发现 {count} 个潜在命令注入风险")
     
     def check_path_traversal(self):
         """检查路径遍历漏洞"""
-        print("\n[4/13] 检查路径遍历漏洞...")
+        logger.info("[4/13] 检查路径遍历漏洞...")
         
         patterns = [
             (r'open\s*\(\s*[f\"\'].*\{.*\}.*[\"\']', "open() 使用字符串插值"),
@@ -215,11 +219,11 @@ class SecurityAuditor:
         
         count = 0
         # 简化检查
-        print(f"  发现 {count} 个潜在路径遍历风险")
+        logger.info(f"  发现 {count} 个潜在路径遍历风险")
     
     def check_hardcoded_secrets(self):
         """检查硬编码密钥"""
-        print("\n[5/13] 检查硬编码密钥...")
+        logger.info("[5/13] 检查硬编码密钥...")
         
         secret_patterns = [
             (r'password\s*=\s*["\'][^"\']+["\']', "硬编码密码"),
@@ -259,11 +263,11 @@ class SecurityAuditor:
                                     ))
                                     count += 1
         
-        print(f"  发现 {count} 个潜在硬编码密钥")
+        logger.info(f"  发现 {count} 个潜在硬编码密钥")
     
     def check_insecure_deserialization(self):
         """检查不安全的反序列化"""
-        print("\n[6/13] 检查不安全的反序列化...")
+        logger.info("[6/13] 检查不安全的反序列化...")
         
         # 使用更精确的模式，排除 asyncio.create_subprocess_exec 等安全 API
         dangerous_patterns = [
@@ -310,21 +314,21 @@ class SecurityAuditor:
                                 ))
                                 count += 1
         
-        print(f"  发现 {count} 个潜在不安全的反序列化")
+        logger.info(f"  发现 {count} 个潜在不安全的反序列化")
     
     def check_weak_crypto(self):
         """检查弱加密"""
-        print("\n[7/13] 检查弱加密...")
+        logger.info("[7/13] 检查弱加密...")
         
         weak_algorithms = ['md5', 'sha1', 'DES', 'RC4', 'RSA-1024']
         
         count = 0
         # 简化检查
-        print(f"  发现 {count} 个弱加密使用")
+        logger.info(f"  发现 {count} 个弱加密使用")
     
     def check_resource_leaks(self):
         """检查资源泄漏"""
-        print("\n[8/13] 检查资源泄漏...")
+        logger.info("[8/13] 检查资源泄漏...")
         
         # 安全模式：这些代码不是资源泄漏
         safe_patterns = [
@@ -366,11 +370,11 @@ class SecurityAuditor:
                                 ))
                                 count += 1
         
-        print(f"  发现 {count} 个潜在资源泄漏")
+        logger.info(f"  发现 {count} 个潜在资源泄漏")
     
     def check_infinite_loops(self):
         """检查无限循环风险"""
-        print("\n[9/13] 检查无限循环风险...")
+        logger.info("[9/13] 检查无限循环风险...")
         
         count = 0
         for root, dirs, files in os.walk(os.path.join(self.repo_path, 'src')):
@@ -403,11 +407,11 @@ class SecurityAuditor:
                                     ))
                                     count += 1
         
-        print(f"  发现 {count} 个潜在无限循环风险")
+        logger.info(f"  发现 {count} 个潜在无限循环风险")
     
     def check_exception_handling(self):
         """检查异常处理"""
-        print("\n[10/13] 检查异常处理...")
+        logger.info("[10/13] 检查异常处理...")
         
         count = 0
         for root, dirs, files in os.walk(os.path.join(self.repo_path, 'src')):
@@ -431,11 +435,11 @@ class SecurityAuditor:
                             ))
                             count += 1
         
-        print(f"  发现 {count} 个问题异常处理")
+        logger.info(f"  发现 {count} 个问题异常处理")
     
     def check_timeout_issues(self):
         """检查超时设置"""
-        print("\n[11/13] 检查超时设置...")
+        logger.info("[11/13] 检查超时设置...")
         
         count = 0
         for root, dirs, files in os.walk(os.path.join(self.repo_path, 'src')):
@@ -461,23 +465,23 @@ class SecurityAuditor:
                                 ))
                                 count += 1
         
-        print(f"  发现 {count} 个缺失超时设置")
+        logger.info(f"  发现 {count} 个缺失超时设置")
     
     def check_race_conditions(self):
         """检查竞态条件"""
-        print("\n[12/13] 检查竞态条件...")
+        logger.info("[12/13] 检查竞态条件...")
         
         count = 0
         # 简化检查
-        print(f"  发现 {count} 个潜在竞态条件")
+        logger.info(f"  发现 {count} 个潜在竞态条件")
     
     def check_type_confusion(self):
         """检查类型混淆"""
-        print("\n[13/13] 检查类型混淆...")
+        logger.info("[13/13] 检查类型混淆...")
         
         count = 0
         # 简化检查
-        print(f"  发现 {count} 个类型混淆风险")
+        logger.info(f"  发现 {count} 个类型混淆风险")
     
     def generate_report(self) -> str:
         """生成审计报告"""
@@ -540,19 +544,20 @@ class SecurityAuditor:
         with open(output_file, 'w') as f:
             json.dump(data, f, indent=2)
         
-        print(f"\n📄 JSON 报告已保存: {output_file}")
+        logger.info(f"JSON 报告已保存: {output_file}")
 
 
 def main():
-    print("🔒 AI-Bridge 安全审计工具")
-    print("="*70)
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logger.info("AI-Bridge 安全审计工具")
+    logger.info("="*70)
     
     auditor = SecurityAuditor(REPO_PATH)
     issues = auditor.audit_all()
     
     # 打印报告
     report = auditor.generate_report()
-    print(report)
+    logger.info(report)
     
     # 导出 JSON
     output_file = os.path.join(REPO_PATH, "ai-bridge-security-report.json")
@@ -561,10 +566,10 @@ def main():
     # 退出码
     p0_count = len([i for i in issues if i.level == "P0"])
     if p0_count > 0:
-        print(f"\n❌ 发现 {p0_count} 个 P0 级别问题，请立即修复！")
+        logger.warning(f"发现 {p0_count} 个 P0 级别问题，请立即修复！")
         sys.exit(1)
     else:
-        print("\n✅ 未发现 P0 级别安全问题")
+        logger.info("未发现 P0 级别安全问题")
         sys.exit(0)
 
 

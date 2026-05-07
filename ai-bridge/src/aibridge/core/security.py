@@ -412,8 +412,24 @@ class SecureAdapterWrapper:
         return result
     
     def __getattr__(self, name):
-        """代理其他属性访问到原始适配器"""
-        return getattr(self.adapter, name)
+        """只允许透传安全的只读属性，拒绝访问私有/敏感属性"""
+        # 白名单：只允许这些属性透传
+        safe_attrs = {
+            'info', 'adapter_id', 'adapter_name', 'is_connected',
+            'get_supported_actions', 'supports_action', 'health_check',
+        }
+        if name in safe_attrs:
+            return getattr(self.adapter, name)
+        # 拒绝所有以 _ 开头的私有属性和未在白名单中的属性
+        if name.startswith('_'):
+            raise AttributeError(
+                f"安全限制：不允许直接访问私有属性 '{name}'，"
+                f"请通过 execute() 方法进行安全操作"
+            )
+        raise AttributeError(
+            f"SecureAdapterWrapper 不支持 '{name}' 属性，"
+            f"所有操作请通过 execute() 方法进行"
+        )
 
 
 # ============ 便捷函数 ============

@@ -541,7 +541,14 @@ class Orchestrator:
             async with semaphore:
                 await self._execute_task(task, context)
         
-        await asyncio.gather(*[run_with_semaphore(t) for t in tasks])
+        results = await asyncio.gather(
+            *[run_with_semaphore(t) for t in tasks],
+            return_exceptions=True
+        )
+        # 记录有异常的任务
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"Task {tasks[i].task_id} raised: {result}")
     
     async def _execute_task(
         self,

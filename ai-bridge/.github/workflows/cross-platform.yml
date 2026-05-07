@@ -1,0 +1,38 @@
+name: Cross-Platform CI
+
+# Phase III v0.11.0 — 跨平台测试矩阵
+# 在 Ubuntu / macOS / Windows + Python 3.10/3.11/3.12 上运行
+# OpenXML 后端在三大平台上均可运行（纯 Python 实现）
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-matrix:
+    name: "${{ matrix.os }} / Py${{ matrix.python }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,office-cross]"
+
+      - name: Run unit tests
+        run: pytest tests/ -v --tb=short
+
+      - name: Run cross-platform Office tests (verbose)
+        run: pytest tests/test_office_cross_platform.py tests/test_cli_discovery.py -v --tb=short

@@ -41,8 +41,9 @@ class Config:
         adapters = {}
         for name, adapter_data in data.get("adapters", {}).items():
             if isinstance(adapter_data, dict):
-                enabled = adapter_data.pop("enabled", True)
-                adapters[name] = AdapterConfig(enabled=enabled, config=adapter_data)
+                enabled = adapter_data.get("enabled", True)
+                config_data = {k: v for k, v in adapter_data.items() if k != "enabled"}
+                adapters[name] = AdapterConfig(enabled=enabled, config=config_data)
             else:
                 adapters[name] = AdapterConfig(enabled=bool(adapter_data))
         

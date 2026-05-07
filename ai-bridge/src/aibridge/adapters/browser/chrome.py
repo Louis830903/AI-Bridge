@@ -14,8 +14,11 @@
 import base64
 import json
 import logging
+import re
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 from aibridge.adapters.base import BaseAdapter, AdapterInfo, AdapterType
+from aibridge.utils.security import validate_css_selector, DANGEROUS_CHARS, DANGEROUS_PATTERNS, VALID_SELECTOR_RE
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,35 @@ def get_playwright():
 
 
 class ChromeAdapter(BaseAdapter):
+    """
+    Chrome browser adapter using Playwright.
+    
+    支持两种启动模式：
+    - launch（默认）: 自动启动浏览器，无需手动配置
+    - connect: 连接已有浏览器（CDP模式）
+    
+    实现与 Chrome DevTools MCP 同等能力：
+    - take_snapshot: A11y 树快照，带 uid 定位
+    - 多页面管理: list_pages/select_page/new_page/close_page
+    - 交互操作: hover/drag/press_key/fill_form
+    
+    使用方式：
+        # 方式1: 自动启动（推荐，开箱即用）
+        adapter = ChromeAdapter()  # 或 ChromeAdapter({"mode": "launch"})
+        
+        # 方式2: 连接已有浏览器（需手动启动 Chrome）
+        adapter = ChromeAdapter({"mode": "connect", "cdp_url": "http://localhost:9222"})
+    """
+    @property
+    def page(self):
+        """获取当前 Playwright Page 对象"""
+        return self._page
+
+    @property
+    def has_page(self) -> bool:
+        """检查是否有活跃页面"""
+        return self._page is not None
+
     def _escape_js_string(self, s: str) -> str:
         """转义 JavaScript 字符串，防止注入攻击"""
         if not s:
@@ -69,57 +101,12 @@ class ChromeAdapter(BaseAdapter):
         - 长度限制（防止 DoS）
         - 危险字符和模式
         - 格式有效性
+        
+        委托到 aibridge.utils.security.validate_css_selector 共享实现。
         """
-        if not selector:
-            return False
-        
-        # 长度限制
-        if len(selector) > 500:
-            return False
-        
-        # 禁止危险字符
-        dangerous_chars = ['<', '>', '{', '}', ';', '`', '\x00', '\n', '\r', '\t']
-        for char in dangerous_chars:
-            if char in selector:
-                return False
-        
-        # 禁止危险模式（不区分大小写）
-        dangerous_patterns = [
-            'javascript:', 'expression(', 'eval(', '@import',
-            'behavior:', 'binding:', 'moz-binding:'
-        ]
-        selector_lower = selector.lower()
-        for pattern in dangerous_patterns:
-            if pattern in selector_lower:
-                return False
-        
-        # 使用正则验证基本 CSS 选择器格式
-        import re
-        if not re.match(r'^[\w\s\[\]\.#:\-\*,>+~="\'()@\^\$\|]+$', selector):
-            return False
-        
-        return True
+        valid, _ = validate_css_selector(selector, allow_empty=False)
+        return valid
 
-
-    """
-    Chrome browser adapter using Playwright.
-    
-    支持两种启动模式：
-    - launch（默认）: 自动启动浏览器，无需手动配置
-    - connect: 连接已有浏览器（CDP模式）
-    
-    实现与 Chrome DevTools MCP 同等能力：
-    - take_snapshot: A11y 树快照，带 uid 定位
-    - 多页面管理: list_pages/select_page/new_page/close_page
-    - 交互操作: hover/drag/press_key/fill_form
-    
-    使用方式：
-        # 方式1: 自动启动（推荐，开箱即用）
-        adapter = ChromeAdapter()  # 或 ChromeAdapter({"mode": "launch"})
-        
-        # 方式2: 连接已有浏览器（需手动启动 Chrome）
-        adapter = ChromeAdapter({"mode": "connect", "cdp_url": "http://localhost:9222"})
-    """
     
     info = AdapterInfo(
         id="chrome",
@@ -171,8 +158,36 @@ class ChromeAdapter(BaseAdapter):
         self._browser = None
         self._context = None
         self._page = None
-        # A11y 快照中的元素缓存，用于 uid 定位（实例变量，避免多实例共享）
-        self._snapshot_elements: Dict[str, Any] = {}
+        # A11y 快照中的元素缓存，用于 uid 定位（LRU 淘汰策略）
+        self._snapshot_elements: OrderedDict[str, Any] = OrderedDict()
+        # 策略模式：action → handler 分发字典
+        self._action_handlers: Dict[str, callable] = {
+            "goto": self._handle_goto,
+            "click": self._handle_click,
+            "type": self._handle_type,
+            "read": self._handle_read,
+            "screenshot": self._handle_screenshot,
+            "list_elements": self._handle_list_elements,
+            "wait": self._handle_wait,
+            "scroll": self._handle_scroll,
+            "back": self._handle_back,
+            "forward": self._handle_forward,
+            "reload": self._handle_reload,
+            "execute": self._handle_execute_script,
+            "focus": self._handle_focus,
+            "take_snapshot": self._handle_take_snapshot,
+            "list_pages": self._handle_list_pages,
+            "select_page": self._handle_select_page,
+            "new_page": self._handle_new_page,
+            "close_page": self._handle_close_page,
+            "extract": self._handle_extract,
+            "hover": self._handle_hover,
+            "drag": self._handle_drag,
+            "press_key": self._handle_press_key,
+            "fill_form": self._handle_fill_form,
+            "get_url": self._handle_get_url,
+            "get_title": self._handle_get_title,
+        }
     
     async def connect(self) -> bool:
         """Connect to Chrome - 支持 launch 和 connect 两种模式"""
@@ -216,34 +231,36 @@ class ChromeAdapter(BaseAdapter):
             return True
         except Exception as e:
             self._connected = False
-            # 清理所有已分配的资源，防止内存泄漏
             logger.error(f"连接 Chrome 失败: {e}")
-            try:
-                if self._page:
-                    await self._page.close()
-            except Exception:
-                pass
-            try:
-                if self._context:
-                    await self._context.close()
-            except Exception:
-                pass
-            try:
-                if self._browser:
-                    await self._browser.close()
-            except Exception:
-                pass
-            try:
-                if self._playwright:
-                    await self._playwright.stop()
-            except Exception:
-                pass
-            # 重置所有引用
-            self._page = None
-            self._context = None
-            self._browser = None
-            self._playwright = None
-            raise ConnectionError(f"Failed to connect/launch Chrome: {e}")
+            await self._cleanup_resources()
+            raise ConnectionError(f"Failed to connect/launch Chrome: {e}") from e
+
+    async def _cleanup_resources(self):
+        """清理所有已分配的资源（容错清理，任一资源清理失败不影响其他资源，且仅在成功关闭后置None）"""
+        cleanup_order = [
+            ('_page', 'close'),
+            ('_context', 'close'),
+            ('_browser', 'close'),
+            ('_playwright', 'stop'),
+        ]
+        cleanup_errors = []
+
+        for resource_name, close_method in cleanup_order:
+            resource = getattr(self, resource_name, None)
+            if resource is not None:
+                try:
+                    close_func = getattr(resource, close_method)
+                    await close_func()
+                    # 仅在成功关闭后清除引用
+                    setattr(self, resource_name, None)
+                except Exception as exc:
+                    cleanup_errors.append(f"{resource_name}: {exc}")
+                    # 保留引用以便后续诊断，不置 None
+
+        if cleanup_errors:
+            logger.warning(f"资源清理时部分失败: {'; '.join(cleanup_errors)}")
+
+        self._snapshot_elements = OrderedDict()
     
     async def disconnect(self) -> bool:
         """断开与 Chrome 的连接，清理所有资源"""
@@ -271,7 +288,7 @@ class ChromeAdapter(BaseAdapter):
             self._browser = None
             self._page = None
             self._playwright = None
-            self._snapshot_elements = {}
+            self._snapshot_elements = OrderedDict()
             self._connected = False
             return True
         except Exception as e:
@@ -281,7 +298,7 @@ class ChromeAdapter(BaseAdapter):
             self._browser = None
             self._page = None
             self._playwright = None
-            self._snapshot_elements = {}
+            self._snapshot_elements = OrderedDict()
             self._connected = False
             return False
     
@@ -337,300 +354,258 @@ class ChromeAdapter(BaseAdapter):
         timeout = options.get("timeout", self.DEFAULT_TIMEOUT)
         
         try:
-            if action == "goto":
-                url = value if isinstance(value, str) else target.get("url") if target else None
-                if not url:
-                    return {"success": False, "error": "goto 操作需要提供 url"}
-                # 等待页面加载到 domcontentloaded 状态
-                await self._page.goto(url, timeout=timeout, wait_until="domcontentloaded")
-                return {"success": True, "data": {"url": self._page.url}}
-            
-            elif action == "click":
-                # 支持 force 参数强制操作隐藏元素
-                force = options.get("force", False)
-                # 尝试多种定位策略
-                element = await self._find_element_with_fallback(target, timeout, force)
-                if not element:
-                    return {"success": False, "error": f"无法找到可点击的元素: {target}"}
-                try:
-                    await element.click(timeout=timeout)
-                except Exception as e:
-                    # 如果 click 失败且 force=True，尝试通过 JS 点击
-                    if force and target and target.get("css"):
-                        selector = target["css"]
-                        if not self._validate_css_selector(selector):
-                            raise ValueError(f"Invalid CSS selector: {selector}")
-                        # 安全：使用参数化调用，避免 JS 注入
-                        await self._page.evaluate(
-                            """(sel) => {
-                                const el = document.querySelector(sel);
-                                if (el) el.click();
-                            }""",
-                            selector
-                        )
-                    else:
-                        raise
-                return {"success": True}
-            
-            elif action == "type":
-                text = value or ""
-                # 支持 force 参数强制操作隐藏元素
-                force = options.get("force", False)
-                # 尝试多种定位策略
-                element = await self._find_element_with_fallback(target, timeout, force)
-                if not element:
-                    return {"success": False, "error": f"无法找到可输入的元素: {target}"}
-                # 使用 Playwright 的 locator fill 方法
-                try:
-                    await element.fill(text, timeout=timeout)
-                except Exception as e:
-                    # 如果 fill 失败且 force=True，尝试通过 JS 设置值
-                    if force and target and target.get("css"):
-                        selector = target["css"]
-                        if not self._validate_css_selector(selector):
-                            raise ValueError(f"Invalid CSS selector: {selector}")
-                        # 安全：使用参数化调用，避免 JS 注入
-                        await self._page.evaluate(
-                            """(sel, val) => {
-                                const el = document.querySelector(sel);
-                                if (el) el.value = val;
-                            }""",
-                            selector, text
-                        )
-                    else:
-                        raise
-                return {"success": True}
-            
-            elif action == "read":
-                # 支持 force 参数强制读取隐藏元素
-                force = options.get("force", False)
-                # 尝试多种定位策略
-                element = await self._find_element_with_fallback(target, timeout, force)
-                if not element:
-                    # 如果找不到元素，尝试通过 JS 读取页面标题
-                    if target and target.get("css") == "title":
-                        title = await self._page.title()
-                        return {"success": True, "data": title}
-                    return {"success": False, "error": f"无法找到可读取的元素: {target}"}
-                # 获取元素文本内容
-                try:
-                    text = await element.inner_text()
-                except Exception as e:
-                    # 如果 inner_text 失败，尝试通过 JS 获取
-                    if force and target and target.get("css"):
-                        selector = target["css"]
-                        if not self._validate_css_selector(selector):
-                            raise ValueError(f"Invalid CSS selector: {selector}")
-                        # 安全：使用参数化调用，避免 JS 注入
-                        text = await self._page.evaluate(
-                            """(sel) => {
-                                const el = document.querySelector(sel);
-                                return el?.innerText || el?.value || '';
-                            }""",
-                            selector
-                        )
-                    else:
-                        raise
-                return {"success": True, "data": text}
-            
-            elif action == "screenshot":
-                # 支持保存到文件：options={"path": "/path/to/file.png"}
-                import os
-                path = options.get("path")
-                full_page = options.get("full_page", False)
-                
-                if path:
-                    # 校验目录是否存在
-                    dir_path = os.path.dirname(path)
-                    if dir_path and not os.path.exists(dir_path):
-                        return {"success": False, "error": f"目录不存在: {dir_path}"}
-                    # 保存到文件
-                    await self._page.screenshot(path=path, full_page=full_page)
-                    return {"success": True, "path": path}
-                else:
-                    # 返回 base64
-                    screenshot = await self._page.screenshot(full_page=full_page)
-                    b64 = base64.b64encode(screenshot).decode()
-                    return {"success": True, "screenshot": b64}
-            
-            elif action == "list_elements":
-                elements = await self._get_interactive_elements()
-                return {"success": True, "elements": elements}
-            
-            elif action == "wait":
-                selector = self._build_selector(target)
-                await self._page.wait_for_selector(selector, timeout=timeout)
-                return {"success": True}
-            
-            elif action == "scroll":
-                direction = value or "down"
-                # 安全：验证 distance 是整数，防止 JS 注入
-                distance = self.DEFAULT_SCROLL_DISTANCE
-                if options and "distance" in options:
-                    try:
-                        distance = int(options["distance"])
-                    except (ValueError, TypeError):
-                        return {"success": False, "error": "distance must be an integer"}
-                
-                # 安全：使用 Playwright 的内置方法，避免直接 evaluate
-                if direction == "down":
-                    await self._page.mouse.wheel(0, distance)
-                elif direction == "up":
-                    await self._page.mouse.wheel(0, -distance)
-                return {"success": True}
-            
-            elif action == "back":
-                await self._page.go_back(timeout=timeout)
-                return {"success": True}
-            
-            elif action == "forward":
-                await self._page.go_forward(timeout=timeout)
-                return {"success": True}
-            
-            elif action == "reload":
-                await self._page.reload(timeout=timeout)
-                return {"success": True}
-            
-            elif action == "execute":
-                # 安全限制：只允许执行白名单中的预定义脚本
-                script_name = value or ""
-                if not script_name:
-                    return {
-                        "success": False, 
-                        "error": "execute 操作需要提供脚本名称",
-                        "available_scripts": list(self.SAFE_SCRIPTS.keys())
-                    }
-                
-                # 检查是否在白名单中
-                if script_name not in self.SAFE_SCRIPTS:
-                    return {
-                        "success": False,
-                        "error": f"不允许执行任意 JavaScript。可用脚本: {list(self.SAFE_SCRIPTS.keys())}",
-                        "available_scripts": list(self.SAFE_SCRIPTS.keys())
-                    }
-                
-                try:
-                    # 执行白名单中的安全脚本
-                    safe_script = self.SAFE_SCRIPTS[script_name]
-                    result = await self._page.evaluate(safe_script)
-                    
-                    # 处理 None 返回值，确保结果可序列化
-                    if result is None:
-                        return {"success": True, "data": None, "script": script_name}
-                    
-                    # 处理复杂对象，确保可以 JSON 序列化
-                    try:
-                        json.dumps(result)
-                        return {"success": True, "data": result, "script": script_name}
-                    except (TypeError, ValueError):
-                        return {"success": True, "data": str(result), "script": script_name}
-                        
-                except Exception as e:
-                    logger.error(f"JavaScript 执行失败: {e}")
-                    return {"success": False, "error": f"JavaScript 执行失败: {str(e)}"}
-            
-            elif action == "focus":
-                await self._page.bring_to_front()
-                return {"success": True}
-            
-            # ==================== 新增能力 ====================
-            
-            # A11y 树快照 - 核心能力，支持 uid 定位
-            elif action == "take_snapshot":
-                result = await self._take_accessibility_snapshot()
-                if result.get("success"):
-                    return {
-                        "success": True, 
-                        "snapshot": result.get("snapshot", ""),
-                        "snapshot_type": result.get("snapshot_type", "unknown"),
-                        "elements": result.get("elements", []),
-                        "element_count": result.get("element_count", 0)
-                    }
-                else:
-                    return {"success": False, "error": result.get("error", "快照失败")}
-            
-            # 多页面管理
-            elif action == "list_pages":
-                pages = await self._list_pages()
-                return {"success": True, "pages": pages}
-            
-            elif action == "select_page":
-                page_id = value if isinstance(value, int) else target.get("page_id") if target else 0
-                await self._select_page(page_id)
-                return {"success": True, "selected": page_id}
-            
-            elif action == "new_page":
-                url = value if isinstance(value, str) else target.get("url") if target else self.DEFAULT_BLANK_URL
-                page_info = await self._new_page(url)
-                return {"success": True, "page": page_info}
-            
-            elif action == "close_page":
-                page_id = value if isinstance(value, int) else target.get("page_id") if target else None
-                await self._close_page(page_id)
-                return {"success": True}
-            
-            # 数据提取 - 新增 extract action
-            elif action == "extract":
-                return await self._extract_data(target, value, options, timeout)
-            
-            # 更多交互操作
-            elif action == "hover":
-                selector = self._build_selector(target)
-                # 先等待元素可见
-                await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
-                await self._page.hover(selector, timeout=timeout)
-                return {"success": True}
-            
-            elif action == "drag":
-                if not target:
-                    return {"success": False, "error": "drag 操作需要 target 参数"}
-                from_sel = target.get("from")
-                to_sel = target.get("to")
-                if not from_sel or not to_sel:
-                    return {"success": False, "error": "drag 操作需要 from 和 to 参数"}
-                # 先等待两个元素都可见
-                await self._page.wait_for_selector(from_sel, state="visible", timeout=timeout)
-                await self._page.wait_for_selector(to_sel, state="visible", timeout=timeout)
-                await self._page.drag_and_drop(from_sel, to_sel, timeout=timeout)
-                return {"success": True}
-            
-            elif action == "press_key":
-                key = value if isinstance(value, str) else target.get("key") if target else None
-                if not key:
-                    return {"success": False, "error": "press_key 操作需要提供 key"}
-                await self._page.keyboard.press(key)
-                return {"success": True}
-            
-            elif action == "fill_form":
-                # 批量填写表单：value = [{"selector": "#id", "value": "text"}, ...]
-                form_data = value if isinstance(value, list) else []
-                filled_count = 0
-                for item in form_data:
-                    # 类型校验：跳过非字典元素
-                    if not isinstance(item, dict):
-                        continue
-                    sel = item.get("selector")
-                    val = item.get("value", "")
-                    if sel and isinstance(val, str):
-                        # 等待元素可见再填充
-                        await self._page.wait_for_selector(sel, state="visible", timeout=timeout)
-                        await self._page.fill(sel, val, timeout=timeout)
-                        filled_count += 1
-                return {"success": True, "filled": filled_count}
-            
-            # 获取页面信息
-            elif action == "get_url":
-                return {"success": True, "url": self._page.url}
-            
-            elif action == "get_title":
-                title = await self._page.title()
-                return {"success": True, "title": title}
-            
-            else:
+            handler = self._action_handlers.get(action)
+            if not handler:
                 return {"success": False, "error": f"Unknown action: {action}"}
-                
+            return await handler(target, value, options, timeout)
         except Exception as e:
+            logger.error(f"Action '{action}' failed: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
+    
+    # ============ Action Handlers ============
+    
+    async def _handle_goto(self, target, value, options, timeout) -> Dict[str, Any]:
+        url = value if isinstance(value, str) else target.get("url") if target else None
+        if not url:
+            return {"success": False, "error": "goto 操作需要提供 url"}
+        await self._page.goto(url, timeout=timeout, wait_until="domcontentloaded")
+        return {"success": True, "data": {"url": self._page.url}}
+    
+    async def _handle_click(self, target, value, options, timeout) -> Dict[str, Any]:
+        force = options.get("force", False)
+        element = await self._find_element_with_fallback(target, timeout, force)
+        if not element:
+            return {"success": False, "error": f"无法找到可点击的元素: {target}"}
+        try:
+            await element.click(timeout=timeout)
+        except Exception as e:
+            if force and target and target.get("css"):
+                selector = target["css"]
+                if not self._validate_css_selector(selector):
+                    raise ValueError(f"Invalid CSS selector: {selector}")
+                await self._page.evaluate(
+                    """(sel) => {
+                        const el = document.querySelector(sel);
+                        if (el) el.click();
+                    }""",
+                    selector
+                )
+            else:
+                raise
+        return {"success": True}
+    
+    async def _handle_type(self, target, value, options, timeout) -> Dict[str, Any]:
+        text = value or ""
+        force = options.get("force", False)
+        element = await self._find_element_with_fallback(target, timeout, force)
+        if not element:
+            return {"success": False, "error": f"无法找到可输入的元素: {target}"}
+        try:
+            await element.fill(text, timeout=timeout)
+        except Exception as e:
+            if force and target and target.get("css"):
+                selector = target["css"]
+                if not self._validate_css_selector(selector):
+                    raise ValueError(f"Invalid CSS selector: {selector}")
+                await self._page.evaluate(
+                    """(sel, val) => {
+                        const el = document.querySelector(sel);
+                        if (el) el.value = val;
+                    }""",
+                    selector, text
+                )
+            else:
+                raise
+        return {"success": True}
+    
+    async def _handle_read(self, target, value, options, timeout) -> Dict[str, Any]:
+        force = options.get("force", False)
+        element = await self._find_element_with_fallback(target, timeout, force)
+        if not element:
+            if target and target.get("css") == "title":
+                title = await self._page.title()
+                return {"success": True, "data": title}
+            return {"success": False, "error": f"无法找到可读取的元素: {target}"}
+        try:
+            text = await element.inner_text()
+        except Exception as e:
+            if force and target and target.get("css"):
+                selector = target["css"]
+                if not self._validate_css_selector(selector):
+                    raise ValueError(f"Invalid CSS selector: {selector}")
+                text = await self._page.evaluate(
+                    """(sel) => {
+                        const el = document.querySelector(sel);
+                        return el?.innerText || el?.value || '';
+                    }""",
+                    selector
+                )
+            else:
+                raise
+        return {"success": True, "data": text}
+    
+    async def _handle_screenshot(self, target, value, options, timeout) -> Dict[str, Any]:
+        import os
+        path = options.get("path")
+        full_page = options.get("full_page", False)
+        if path:
+            dir_path = os.path.dirname(path)
+            if dir_path and not os.path.exists(dir_path):
+                return {"success": False, "error": f"目录不存在: {dir_path}"}
+            await self._page.screenshot(path=path, full_page=full_page)
+            return {"success": True, "path": path}
+        else:
+            screenshot = await self._page.screenshot(full_page=full_page)
+            b64 = base64.b64encode(screenshot).decode()
+            return {"success": True, "screenshot": b64}
+    
+    async def _handle_list_elements(self, target, value, options, timeout) -> Dict[str, Any]:
+        elements = await self._get_interactive_elements()
+        return {"success": True, "elements": elements}
+    
+    async def _handle_wait(self, target, value, options, timeout) -> Dict[str, Any]:
+        selector = self._build_selector(target)
+        await self._page.wait_for_selector(selector, timeout=timeout)
+        return {"success": True}
+    
+    async def _handle_scroll(self, target, value, options, timeout) -> Dict[str, Any]:
+        direction = value or "down"
+        distance = self.DEFAULT_SCROLL_DISTANCE
+        if options and "distance" in options:
+            try:
+                distance = int(options["distance"])
+            except (ValueError, TypeError):
+                return {"success": False, "error": "distance must be an integer"}
+        if direction == "down":
+            await self._page.mouse.wheel(0, distance)
+        elif direction == "up":
+            await self._page.mouse.wheel(0, -distance)
+        return {"success": True}
+    
+    async def _handle_back(self, target, value, options, timeout) -> Dict[str, Any]:
+        await self._page.go_back(timeout=timeout)
+        return {"success": True}
+    
+    async def _handle_forward(self, target, value, options, timeout) -> Dict[str, Any]:
+        await self._page.go_forward(timeout=timeout)
+        return {"success": True}
+    
+    async def _handle_reload(self, target, value, options, timeout) -> Dict[str, Any]:
+        await self._page.reload(timeout=timeout)
+        return {"success": True}
+    
+    async def _handle_execute_script(self, target, value, options, timeout) -> Dict[str, Any]:
+        script_name = value or ""
+        if not script_name:
+            return {
+                "success": False,
+                "error": "execute 操作需要提供脚本名称",
+                "available_scripts": list(self.SAFE_SCRIPTS.keys())
+            }
+        if script_name not in self.SAFE_SCRIPTS:
+            return {
+                "success": False,
+                "error": f"不允许执行任意 JavaScript。可用脚本: {list(self.SAFE_SCRIPTS.keys())}",
+                "available_scripts": list(self.SAFE_SCRIPTS.keys())
+            }
+        try:
+            safe_script = self.SAFE_SCRIPTS[script_name]
+            result = await self._page.evaluate(safe_script)
+            if result is None:
+                return {"success": True, "data": None, "script": script_name}
+            try:
+                json.dumps(result)
+                return {"success": True, "data": result, "script": script_name}
+            except (TypeError, ValueError):
+                return {"success": True, "data": str(result), "script": script_name}
+        except Exception as e:
+            logger.error(f"JavaScript 执行失败: {e}")
+            return {"success": False, "error": f"JavaScript 执行失败: {str(e)}"}
+    
+    async def _handle_focus(self, target, value, options, timeout) -> Dict[str, Any]:
+        await self._page.bring_to_front()
+        return {"success": True}
+    
+    async def _handle_take_snapshot(self, target, value, options, timeout) -> Dict[str, Any]:
+        result = await self._take_accessibility_snapshot()
+        if result.get("success"):
+            return {
+                "success": True,
+                "snapshot": result.get("snapshot", ""),
+                "snapshot_type": result.get("snapshot_type", "unknown"),
+                "elements": result.get("elements", []),
+                "element_count": result.get("element_count", 0)
+            }
+        else:
+            return {"success": False, "error": result.get("error", "快照失败")}
+    
+    async def _handle_list_pages(self, target, value, options, timeout) -> Dict[str, Any]:
+        pages = await self._list_pages()
+        return {"success": True, "pages": pages}
+    
+    async def _handle_select_page(self, target, value, options, timeout) -> Dict[str, Any]:
+        page_id = value if isinstance(value, int) else target.get("page_id") if target else 0
+        await self._select_page(page_id)
+        return {"success": True, "selected": page_id}
+    
+    async def _handle_new_page(self, target, value, options, timeout) -> Dict[str, Any]:
+        url = value if isinstance(value, str) else target.get("url") if target else self.DEFAULT_BLANK_URL
+        page_info = await self._new_page(url)
+        return {"success": True, "page": page_info}
+    
+    async def _handle_close_page(self, target, value, options, timeout) -> Dict[str, Any]:
+        page_id = value if isinstance(value, int) else target.get("page_id") if target else None
+        await self._close_page(page_id)
+        return {"success": True}
+    
+    async def _handle_extract(self, target, value, options, timeout) -> Dict[str, Any]:
+        return await self._extract_data(target, value, options, timeout)
+    
+    async def _handle_hover(self, target, value, options, timeout) -> Dict[str, Any]:
+        selector = self._build_selector(target)
+        await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
+        await self._page.hover(selector, timeout=timeout)
+        return {"success": True}
+    
+    async def _handle_drag(self, target, value, options, timeout) -> Dict[str, Any]:
+        if not target:
+            return {"success": False, "error": "drag 操作需要 target 参数"}
+        from_sel = target.get("from")
+        to_sel = target.get("to")
+        if not from_sel or not to_sel:
+            return {"success": False, "error": "drag 操作需要 from 和 to 参数"}
+        await self._page.wait_for_selector(from_sel, state="visible", timeout=timeout)
+        await self._page.wait_for_selector(to_sel, state="visible", timeout=timeout)
+        await self._page.drag_and_drop(from_sel, to_sel, timeout=timeout)
+        return {"success": True}
+    
+    async def _handle_press_key(self, target, value, options, timeout) -> Dict[str, Any]:
+        key = value if isinstance(value, str) else target.get("key") if target else None
+        if not key:
+            return {"success": False, "error": "press_key 操作需要提供 key"}
+        await self._page.keyboard.press(key)
+        return {"success": True}
+    
+    async def _handle_fill_form(self, target, value, options, timeout) -> Dict[str, Any]:
+        form_data = value if isinstance(value, list) else []
+        filled_count = 0
+        for item in form_data:
+            if not isinstance(item, dict):
+                continue
+            sel = item.get("selector")
+            val = item.get("value", "")
+            if sel and isinstance(val, str):
+                await self._page.wait_for_selector(sel, state="visible", timeout=timeout)
+                await self._page.fill(sel, val, timeout=timeout)
+                filled_count += 1
+        return {"success": True, "filled": filled_count}
+    
+    async def _handle_get_url(self, target, value, options, timeout) -> Dict[str, Any]:
+        return {"success": True, "url": self._page.url}
+    
+    async def _handle_get_title(self, target, value, options, timeout) -> Dict[str, Any]:
+        title = await self._page.title()
+        return {"success": True, "title": title}
     
     def _build_selector(self, target) -> str:
         """构建 Playwright 选择器，支持 uid/css/xpath/name/role 多种方式"""
@@ -737,7 +712,7 @@ class ChromeAdapter(BaseAdapter):
                     }
             
             # 为每个元素分配 uid 并缓存（带大小限制）
-            self._snapshot_elements = {}
+            self._snapshot_elements = OrderedDict()
             uid_counter = [0]
             
             def assign_uids(node: dict, prefix: str = "") -> dict:
@@ -745,23 +720,24 @@ class ChromeAdapter(BaseAdapter):
                 if not node or not isinstance(node, dict):
                     return node
                 
-                # 检查缓存大小限制
+                # 检查缓存大小限制，使用 LRU 淘汰最旧条目
                 if len(self._snapshot_elements) >= self.MAX_SNAPSHOT_CACHE:
-                    # 达到上限，不再缓存新元素但继续分配 uid
-                    uid = f"{prefix}{uid_counter[0]}"
-                    uid_counter[0] += 1
-                    node["uid"] = uid
-                else:
-                    uid = f"{prefix}{uid_counter[0]}"
-                    uid_counter[0] += 1
-                    node["uid"] = uid
-                    
-                    # 缓存元素信息
-                    self._snapshot_elements[uid] = {
-                        "role": node.get("role"),
-                        "name": node.get("name"),
-                        "value": node.get("value"),
-                    }
+                    # 淘汰最旧的 20% 条目
+                    evict_count = max(1, self.MAX_SNAPSHOT_CACHE // 5)
+                    for _ in range(evict_count):
+                        self._snapshot_elements.popitem(last=False)
+                
+                uid = f"{prefix}{uid_counter[0]}"
+                uid_counter[0] += 1
+                node["uid"] = uid
+                
+                # 缓存元素信息（LRU: 最近访问的移到末尾）
+                self._snapshot_elements[uid] = {
+                    "role": node.get("role"),
+                    "name": node.get("name"),
+                    "value": node.get("value"),
+                }
+                self._snapshot_elements.move_to_end(uid)
                 
                 if "children" in node and isinstance(node["children"], list):
                     for child in node["children"]:
@@ -843,7 +819,7 @@ class ChromeAdapter(BaseAdapter):
             """)
             
             # 为 DOM 元素分配 uid
-            self._snapshot_elements = {}
+            self._snapshot_elements = OrderedDict()
             for i, el in enumerate(elements):
                 uid = f"{self.UID_PREFIX}dom_{i}"
                 el["uid"] = uid
@@ -1161,8 +1137,15 @@ class ChromeAdapter(BaseAdapter):
             if schema:
                 # 根据 schema 提取指定字段，使用安全的参数化方式
                 fields = list(schema.keys())
-                # 验证字段名安全性
-                safe_fields = [f for f in fields if f.isalnum() or f.replace('_', '').isalnum()]
+                # 验证字段名安全性（严格的 JS 标识符规则 + 原型链污染防护）
+                import re
+                FIELD_NAME_PATTERN = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+                safe_fields = [
+                    f for f in fields
+                    if isinstance(f, str)
+                    and FIELD_NAME_PATTERN.match(f)
+                    and f not in ('__proto__', 'constructor', 'prototype')
+                ]
                 
                 data = await self._page.evaluate(
                     """(selector, fields, multiple) => {

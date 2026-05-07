@@ -4,8 +4,11 @@ Base Adapter - Abstract base class for all adapters
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass, field
+
+if TYPE_CHECKING:
+    from aibridge.core.domain_registry import DomainIntentRegistry
 
 
 class AdapterType(str, Enum):
@@ -176,6 +179,18 @@ class BaseAdapter(ABC):
         """Get list of supported actions."""
         return self.info.actions.copy()
     
+    def register_intents(self, registry: "DomainIntentRegistry") -> None:
+        """
+        Register intent patterns for this adapter with the domain registry.
+        
+        Override in subclass to declare adapter-specific intent patterns.
+        Default: no-op (adapter has no intent patterns).
+        
+        Args:
+            registry: The DomainIntentRegistry to register patterns into
+        """
+        pass
+    
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}(id={self.info.id}, connected={self._connected})>"
 
@@ -236,3 +251,7 @@ class SyncBaseAdapter(ABC):
                 "status": "error",
                 "error": str(e)
             }
+    
+    def register_intents(self, registry: "DomainIntentRegistry") -> None:
+        """Register intent patterns (default no-op)."""
+        pass

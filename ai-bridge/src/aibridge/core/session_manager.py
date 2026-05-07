@@ -97,10 +97,10 @@ class SessionManager:
             保存结果
         """
         try:
-            if not self.adapter._page:
-                return {"success": False, "error": "页面未初始化"}
+            if not hasattr(self.adapter, 'has_page') or not self.adapter.has_page:
+                return {"success": False, "error": "当前适配器不支持页面操作或页面未初始化"}
             
-            page = self.adapter._page
+            page = self.adapter.page
             
             # 获取当前页面信息
             url = page.url
@@ -183,12 +183,20 @@ class SessionManager:
             with open(session_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
+            # 验证数据结构完整性
+            required_keys = {'name', 'created_at', 'updated_at', 'url', 'title'}
+            if not isinstance(data, dict):
+                return {"success": False, "error": "会话文件格式无效"}
+            if not required_keys.issubset(data.keys()):
+                missing = required_keys - data.keys()
+                return {"success": False, "error": f"会话文件缺少必需字段: {missing}"}
+            
             session_data = SessionData(**data)
             
-            if not self.adapter._page:
-                return {"success": False, "error": "页面未初始化"}
+            if not hasattr(self.adapter, 'has_page') or not self.adapter.has_page:
+                return {"success": False, "error": "当前适配器不支持页面操作或页面未初始化"}
             
-            page = self.adapter._page
+            page = self.adapter.page
             context = page.context
             
             # 导航到保存的 URL

@@ -1,521 +1,565 @@
-"""
-Security Utilities - Input validation and security tools
-安全工具模块 - 输入验证和安全防护
+"""安全相关的工具函数 — 跨模块共享的验证逻辑。
+
+提供输入验证、URL验证、文件路径验证、密钥管理、速率限制和CSS选择器验证。
+
+Usage:
+    from aibridge.utils.security import (
+        InputValidator, URLValidator, FilePathValidator,
+        SecretManager, RateLimiter, validate_css_selector,
+    )
 """
 
-import re
-import os
-import hmac
 import hashlib
+import hmac
+import re
 import secrets
+import time
 from pathlib import Path
-from typing import Any, List, Optional, Set, Pattern
+from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
-from dataclasses import dataclass, field
+
+# ============ CSS 选择器验证 ============
+
+# 危险字符列表（共享）
+DANGEROUS_CHARS = ['<', '>', '{', '}', ';', '`', '\x00', '\n', '\r']
+
+# 危险模式列表（不区分大小写，共享）
+DANGEROUS_PATTERNS = [
+    'javascript:', 'expression(', 'eval(', '@import',
+    'behavior:', 'binding:', 'moz-binding:'
+]
+
+# 合法的 CSS 选择器字符
+VALID_SELECTOR_RE = re.compile(r'^[\w\s\[\]\.#:\-\*,>+~="\'()@\^\$\|]+$')
 
 
-# ============ Input Validators ============
+def validate_css_selector(selector: str, allow_empty: bool = True) -> Tuple[bool, str]:
+    """通用的 CSS 选择器安全验证。
+
+    检查：长度限制、危险字符、危险模式、格式有效性。
+
+    Args:
+        selector: CSS 选择器字符串。
+        allow_empty: True 则空字符串通过验证（返回成功），
+                     False 则空字符串视为无效。
+
+    Returns:
+        (is_valid, error_message) — is_valid 为 True 表示通过验证，
+        error_message 为错误描述（验证通过时为空字符串）。
+    """
+    # 空选择器处理
+    if not selector:
+        if allow_empty:
+            return True, ""
+        return False, "选择器不能为空"
+
+    if not isinstance(selector, str):
+        return False, "选择器必须是字符串"
+
+    # 长度限制（防止 DoS）
+    if len(selector) > 500:
+        return False, "选择器过长（最大500字符）"
+
+    # 检查危险字符
+    for char in DANGEROUS_CHARS:
+        if char in selector:
+            return False, f"选择器包含不允许的字符: {repr(char)}"
+
+    # 检查危险模式（不区分大小写）
+    selector_lower = selector.lower()
+    for pattern in DANGEROUS_PATTERNS:
+        if pattern in selector_lower:
+            return False, f"选择器包含不允许的模式: {pattern}"
+
+    # 格式有效性验证
+    if not VALID_SELECTOR_RE.match(selector):
+        return False, "选择器格式无效"
+
+    return True, ""
+
+
+# ============ URL 相关安全常量 ============
+
+# URL 最大长度
+MAX_URL_LENGTH = 2048
+
+# 允许的 URL 协议
+ALLOWED_URL_SCHEMES = ('http', 'https')
+
+
+# ============ InputValidator ============
 
 class InputValidator:
-    """输入验证器"""
-    
-    # 危险脚本模式
-    DANGEROUS_PATTERNS = [
-        r'\beval\s*\(',
-        r'\bexec\s*\(',
-        r'__import__',
-        r'__builtins__',
-        r'\bos\.',
-        r'\bsubprocess\.',
-        r'\bsystem\s*\(',
-        r'\bpopen\s*\(',
-        r'<script',
-        r'javascript:',
-        r'on\w+\s*=',
+    """输入验证器 — 提供通用输入的格式与安全验证。"""
+
+    DANGEROUS_SCRIPT_PATTERNS = [
+        re.compile(r'\beval\s*\('),
+        re.compile(r'__import__'),
+        re.compile(r'\bos\.'),
+        re.compile(r'\bsubprocess\.'),
     ]
-    
-    # 编译正则表达式
-    _dangerous_regex: List[Pattern] = []
-    
-    @classmethod
-    def _get_dangerous_patterns(cls) -> List[Pattern]:
-        """获取编译后的危险模式"""
-        if not cls._dangerous_regex:
-            cls._dangerous_regex = [
-                re.compile(p, re.IGNORECASE) for p in cls.DANGEROUS_PATTERNS
-            ]
-        return cls._dangerous_regex
-    
-    @classmethod
+
+    IDENTIFIER_RE = re.compile(r'^[\w@#][\w\-@#]*$')
+
+    PHONE_RE = re.compile(r'^\+?[\d\s\-\(\)]+$')
+
+    EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+    @staticmethod
     def validate_string(
-        cls,
-        value: str,
-        max_length: int = 10000,
-        allow_empty: bool = False,
-        pattern: Optional[str] = None,
+        value, allow_empty: bool = False,
+        max_length: Optional[int] = None, pattern: Optional[str] = None,
     ) -> str:
-        """
-        验证字符串输入
-        
+        """验证并返回字符串。
+
         Args:
-            value: 输入字符串
-            max_length: 最大长度
-            allow_empty: 是否允许空字符串
-            pattern: 正则表达式模式
-            
+            value: 待验证的值。
+            allow_empty: 是否允许空字符串。
+            max_length: 最大长度限制。
+            pattern: 正则表达式模式。
+
         Returns:
-            验证后的字符串
-            
+            str: 通过验证的字符串。
+
         Raises:
-            ValueError: 验证失败
+            ValueError: 验证失败时抛出。
         """
         if not isinstance(value, str):
-            raise ValueError(f"Expected string, got {type(value).__name__}")
-        
-        if not allow_empty and not value.strip():
+            raise ValueError("Expected string, got " + type(value).__name__)
+        if not allow_empty and not value:
             raise ValueError("Empty string not allowed")
-        
-        if len(value) > max_length:
-            raise ValueError(f"String exceeds max length {max_length}")
-        
-        if pattern and not re.match(pattern, value):
-            raise ValueError(f"String does not match pattern: {pattern}")
-        
+        if max_length is not None and len(value) > max_length:
+            raise ValueError(f"String exceeds max length of {max_length}")
+        if pattern is not None:
+            if not re.match(pattern, value):
+                raise ValueError(f"String does not match required pattern")
         return value
-    
-    @classmethod
-    def sanitize_script(cls, script: str, allow_dangerous: bool = False) -> str:
-        """
-        清理脚本内容，检测危险模式
-        
+
+    @staticmethod
+    def sanitize_script(script: str, allow_dangerous: bool = False) -> str:
+        """检查脚本中是否包含危险模式。
+
         Args:
-            script: 脚本内容
-            allow_dangerous: 是否允许危险模式
-            
+            script: 脚本内容。
+            allow_dangerous: 是否允许危险模式。
+
         Returns:
-            清理后的脚本
-            
+            str: 通过检查的脚本。
+
         Raises:
-            ValueError: 检测到危险模式
+            ValueError: 检测到危险模式时抛出。
         """
+        if not isinstance(script, str):
+            raise ValueError("Expected string, got " + type(script).__name__)
         if not allow_dangerous:
-            for pattern in cls._get_dangerous_patterns():
-                if pattern.search(script):
-                    raise ValueError(f"Dangerous pattern detected in script")
-        
+            for pat in InputValidator.DANGEROUS_SCRIPT_PATTERNS:
+                if pat.search(script):
+                    raise ValueError("Dangerous script pattern detected")
         return script
-    
-    @classmethod
-    def validate_identifier(cls, value: str, max_length: int = 100) -> str:
-        """
-        验证标识符（如适配器 ID、频道 ID 等）
-        
-        Args:
-            value: 标识符
-            max_length: 最大长度
-            
-        Returns:
-            验证后的标识符
-        """
-        if not re.match(r'^[\w\-\.@#]+$', value):
-            raise ValueError(f"Invalid identifier format: {value}")
-        
-        if len(value) > max_length:
-            raise ValueError(f"Identifier exceeds max length {max_length}")
-        
-        return value
-    
-    @classmethod
-    def validate_phone(cls, phone: str) -> str:
-        """
-        验证电话号码格式
-        
-        Args:
-            phone: 电话号码
-            
-        Returns:
-            验证后的电话号码
-        """
-        # 移除空格和连字符
-        cleaned = re.sub(r'[\s\-\(\)]', '', phone)
-        
-        # 验证格式: +国家代码 + 号码
-        if not re.match(r'^\+?[1-9]\d{6,14}$', cleaned):
-            raise ValueError(f"Invalid phone number format: {phone}")
-        
-        return cleaned
-    
-    @classmethod
-    def validate_email(cls, email: str) -> str:
-        """
-        验证邮箱格式
-        
-        Args:
-            email: 邮箱地址
-            
-        Returns:
-            验证后的邮箱
-        """
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(pattern, email):
-            raise ValueError(f"Invalid email format: {email}")
-        
-        return email.lower()
 
+    @staticmethod
+    def validate_identifier(identifier: str) -> str:
+        """验证标识符格式（字母、数字、_、-、@、#）。
 
-# ============ URL Validator ============
-
-@dataclass
-class URLValidator:
-    """URL 验证器，支持白名单"""
-    
-    # 允许的协议
-    allowed_schemes: Set[str] = field(default_factory=lambda: {"http", "https"})
-    
-    # 域名白名单（为空则允许所有）
-    allowed_domains: Set[str] = field(default_factory=set)
-    
-    # 域名黑名单
-    blocked_domains: Set[str] = field(default_factory=lambda: {
-        "localhost",
-        "127.0.0.1",
-        "0.0.0.0",
-        "169.254.169.254",  # AWS metadata
-        "metadata.google.internal",  # GCP metadata
-    })
-    
-    # 是否允许内部地址
-    allow_internal: bool = False
-    
-    # 最大 URL 长度
-    max_length: int = 2048
-    
-    def validate(self, url: str) -> str:
-        """
-        验证 URL
-        
         Args:
-            url: URL 字符串
-            
+            identifier: 标识符字符串。
+
         Returns:
-            验证后的 URL
-            
+            str: 通过验证的标识符。
+
         Raises:
-            ValueError: 验证失败
+            ValueError: 格式无效时抛出。
         """
+        if not isinstance(identifier, str):
+            raise ValueError("Expected string, got " + type(identifier).__name__)
+        if not InputValidator.IDENTIFIER_RE.match(identifier):
+            raise ValueError("Invalid identifier")
+        return identifier
+
+    @staticmethod
+    def validate_phone(phone: str) -> str:
+        """验证并清理电话号码。
+
+        Args:
+            phone: 电话号码字符串。
+
+        Returns:
+            str: 清理后的电话号码。
+
+        Raises:
+            ValueError: 格式无效时抛出。
+        """
+        if not isinstance(phone, str):
+            raise ValueError("Expected string, got " + type(phone).__name__)
+        cleaned = re.sub(r'[\s\-\(\)]', '', phone)
+        if not InputValidator.PHONE_RE.match(cleaned):
+            raise ValueError("Invalid phone number")
+        digits = re.sub(r'\D', '', cleaned)
+        if len(digits) < 7:
+            raise ValueError("Invalid phone number")
+        return cleaned
+
+    @staticmethod
+    def validate_email(email: str) -> str:
+        """验证电子邮件地址格式。
+
+        Args:
+            email: 电子邮件地址。
+
+        Returns:
+            str: 通过验证的电子邮件。
+
+        Raises:
+            ValueError: 格式无效时抛出。
+        """
+        if not isinstance(email, str):
+            raise ValueError("Expected string, got " + type(email).__name__)
+        if not InputValidator.EMAIL_RE.match(email):
+            raise ValueError("Invalid email address")
+        return email
+
+
+# ============ URLValidator ============
+
+class URLValidator:
+    """URL 验证器 — 检查协议、域名白名单/黑名单及内网地址。"""
+
+    INTERNAL_SUBNETS = [
+        re.compile(r'^10\.'),
+        re.compile(r'^172\.(1[6-9]|2\d|3[01])\.'),
+        re.compile(r'^192\.168\.'),
+        re.compile(r'^169\.254\.'),
+        re.compile(r'^127\.'),
+        re.compile(r'^0\.'),
+    ]
+
+    def __init__(
+        self,
+        allowed_schemes: Optional[Tuple[str, ...]] = None,
+        allow_internal: bool = False,
+        allowed_domains: Optional[Set[str]] = None,
+        max_length: Optional[int] = None,
+    ):
+        self.allowed_schemes = allowed_schemes or ('http', 'https')
+        self.allow_internal = allow_internal
+        self.allowed_domains = allowed_domains
+        self.max_length = max_length or 2048
+        self.blocked_domains = {'localhost', '127.0.0.1', '0.0.0.0', '::1'}
+
+    def validate(self, url: str) -> str:
+        """验证 URL 的安全性。
+
+        Args:
+            url: 待验证的 URL。
+
+        Returns:
+            str: 通过验证的 URL。
+
+        Raises:
+            ValueError: 验证失败时抛出。
+        """
+        if not isinstance(url, str):
+            raise ValueError("Expected string, got " + type(url).__name__)
+
         if len(url) > self.max_length:
-            raise ValueError(f"URL exceeds max length {self.max_length}")
-        
+            raise ValueError(f"URL exceeds max length of {self.max_length}")
+
         try:
             parsed = urlparse(url)
-        except Exception as e:
-            raise ValueError(f"Invalid URL format: {e}")
-        
-        # 验证协议
+        except Exception:
+            raise ValueError("Invalid URL format")
+
         if parsed.scheme not in self.allowed_schemes:
             raise ValueError(f"URL scheme not allowed: {parsed.scheme}")
-        
-        # 获取域名（不含端口）
-        domain = parsed.netloc.split(':')[0].lower()
-        
-        # 检查黑名单
-        if not self.allow_internal and domain in self.blocked_domains:
-            raise ValueError(f"URL domain is blocked: {domain}")
-        
-        # 检查是否为内部地址
-        if not self.allow_internal:
-            if self._is_internal_address(domain):
-                raise ValueError(f"Internal addresses not allowed: {domain}")
-        
-        # 检查白名单（如果设置了）
-        if self.allowed_domains:
-            if not self._domain_matches_whitelist(domain):
-                raise ValueError(f"URL domain not in whitelist: {domain}")
-        
+
+        hostname = parsed.hostname or ""
+
+        if hostname in self.blocked_domains:
+            raise ValueError(f"Domain is blocked: {hostname}")
+
+        if not self.allow_internal and self._is_internal_ip(hostname):
+            raise ValueError(f"Internal address not allowed: {hostname}")
+
+        if self.allowed_domains is not None:
+            if not self._match_domain(hostname, self.allowed_domains):
+                raise ValueError(f"Domain not in whitelist: {hostname}")
+
         return url
-    
-    def _is_internal_address(self, domain: str) -> bool:
-        """检查是否为内部地址"""
-        # 检查 IP 地址
-        try:
-            parts = domain.split('.')
-            if len(parts) == 4:
-                nums = [int(p) for p in parts]
-                # 10.0.0.0/8
-                if nums[0] == 10:
-                    return True
-                # 172.16.0.0/12
-                if nums[0] == 172 and 16 <= nums[1] <= 31:
-                    return True
-                # 192.168.0.0/16
-                if nums[0] == 192 and nums[1] == 168:
-                    return True
-                # 127.0.0.0/8
-                if nums[0] == 127:
-                    return True
-        except (ValueError, IndexError):
-            pass
-        
+
+    def _is_internal_ip(self, hostname: str) -> bool:
+        """检查主机名是否为内网地址。"""
+        for subnet in self.INTERNAL_SUBNETS:
+            if subnet.match(hostname):
+                return True
         return False
-    
-    def _domain_matches_whitelist(self, domain: str) -> bool:
-        """检查域名是否匹配白名单"""
-        for allowed in self.allowed_domains:
-            if allowed.startswith('*.'):
-                # 通配符匹配
-                suffix = allowed[2:]
-                if domain.endswith(suffix) or domain == suffix:
+
+    def _match_domain(self, hostname: str, allowed: Set[str]) -> bool:
+        """通配符域名匹配（如 *.google.com）。"""
+        for pattern in allowed:
+            if pattern.startswith('*.'):
+                suffix = pattern[2:]
+                if hostname == suffix or hostname.endswith('.' + suffix):
                     return True
-            else:
-                if domain == allowed:
-                    return True
+            elif hostname == pattern:
+                return True
         return False
 
 
-# ============ File Path Validator ============
+# ============ FilePathValidator ============
 
-@dataclass
 class FilePathValidator:
-    """文件路径验证器"""
-    
-    # 允许的目录（必须设置）
-    allowed_directories: List[str] = field(default_factory=list)
-    
-    # 允许的扩展名（为空则允许所有）
-    allowed_extensions: Set[str] = field(default_factory=set)
-    
-    # 禁止的文件名模式
-    blocked_patterns: Set[str] = field(default_factory=lambda: {
-        r'\.\.', 
-        r'\x00',
-        r'~',
-    })
-    
-    # 最大路径长度
-    max_length: int = 260
-    
+    """文件路径验证器 — 限制访问目录、扩展名，检测路径穿越。"""
+
+    BLOCKED_PATTERNS = [
+        re.compile(r'\.\.'),
+    ]
+
+    def __init__(
+        self,
+        allowed_directories: Optional[List[str]] = None,
+        blocked_patterns: Optional[List[re.Pattern]] = None,
+        allowed_extensions: Optional[Set[str]] = None,
+    ):
+        self.allowed_directories = [
+            Path(d).resolve() for d in (allowed_directories or [])
+        ]
+        self.blocked_patterns = blocked_patterns or self.BLOCKED_PATTERNS
+        self.allowed_extensions = allowed_extensions
+
     def validate(self, path: str) -> Path:
-        """
-        验证文件路径
-        
+        """验证文件路径。
+
         Args:
-            path: 文件路径
-            
+            path: 待验证的路径。
+
         Returns:
-            验证后的 Path 对象
-            
+            Path: 解析后的绝对路径。
+
         Raises:
-            ValueError: 验证失败
+            ValueError: 验证失败时抛出。
         """
-        if len(path) > self.max_length:
-            raise ValueError(f"Path exceeds max length {self.max_length}")
-        
-        # 检查禁止的模式
-        for pattern in self.blocked_patterns:
-            if re.search(pattern, path):
-                raise ValueError(f"Path contains blocked pattern")
-        
-        # 解析为绝对路径
-        try:
-            resolved = Path(path).resolve()
-        except Exception as e:
-            raise ValueError(f"Invalid path: {e}")
-        
-        # 检查扩展名
-        if self.allowed_extensions:
-            ext = resolved.suffix.lower()
-            if ext not in self.allowed_extensions:
-                raise ValueError(f"File extension not allowed: {ext}")
-        
-        # 检查是否在允许的目录内
+        resolved = Path(path).resolve()
+
         if self.allowed_directories:
             in_allowed = False
-            for allowed_dir in self.allowed_directories:
-                allowed_path = Path(allowed_dir).resolve()
+            for d in self.allowed_directories:
                 try:
-                    resolved.relative_to(allowed_path)
+                    resolved.relative_to(d)
                     in_allowed = True
                     break
                 except ValueError:
-                    continue
-            
+                    pass
             if not in_allowed:
-                raise ValueError(f"Path not in allowed directories")
-        
+                raise ValueError(f"Path not in allowed directories: {path}")
+
+        path_str = str(path)
+        for pattern in self.blocked_patterns:
+            if pattern.search(path_str):
+                raise ValueError(f"Path contains blocked pattern: {path}")
+
+        if self.allowed_extensions is not None:
+            if resolved.suffix not in self.allowed_extensions:
+                raise ValueError(
+                    f"File extension not allowed: {resolved.suffix}"
+                )
+
         return resolved
-    
+
     def validate_for_read(self, path: str) -> Path:
-        """验证用于读取的文件路径"""
+        """验证读取路径（要求文件存在）。
+
+        Args:
+            path: 待验证的路径。
+
+        Returns:
+            Path: 解析后的绝对路径。
+
+        Raises:
+            ValueError: 文件不存在时抛出。
+        """
         resolved = self.validate(path)
         if not resolved.exists():
-            raise ValueError(f"File does not exist: {path}")
-        if not resolved.is_file():
-            raise ValueError(f"Path is not a file: {path}")
+            raise ValueError(f"File does not exist: {resolved}")
         return resolved
-    
+
     def validate_for_write(self, path: str) -> Path:
-        """验证用于写入的文件路径"""
+        """验证写入路径（要求父目录存在）。
+
+        Args:
+            path: 待验证的路径。
+
+        Returns:
+            Path: 解析后的绝对路径。
+
+        Raises:
+            ValueError: 父目录不存在时抛出。
+        """
         resolved = self.validate(path)
-        # 检查父目录是否存在
         if not resolved.parent.exists():
-            raise ValueError(f"Parent directory does not exist: {resolved.parent}")
+            raise ValueError(
+                f"Parent directory does not exist: {resolved.parent}"
+            )
         return resolved
 
 
-# ============ Token/Secret Security ============
+# ============ SecretManager ============
 
 class SecretManager:
-    """密钥管理器"""
-    
+    """密钥管理器 — 生成令牌、哈希验证、密钥脱敏。"""
+
     @staticmethod
     def generate_token(length: int = 32) -> str:
-        """生成安全的随机令牌"""
-        return secrets.token_urlsafe(length)
-    
-    @staticmethod
-    def hash_secret(secret: str, salt: Optional[str] = None) -> str:
-        """
-        对密钥进行哈希处理
-        
+        """生成安全的随机令牌。
+
         Args:
-            secret: 密钥
-            salt: 盐值（可选）
-            
+            length: 令牌的随机字节数。
+
         Returns:
-            哈希后的字符串
+            str: URL 安全的 Base64 编码令牌。
         """
-        if salt is None:
-            salt = secrets.token_hex(16)
-        
-        combined = f"{salt}:{secret}"
-        hashed = hashlib.sha256(combined.encode()).hexdigest()
-        return f"{salt}:{hashed}"
-    
+        return secrets.token_urlsafe(length)
+
+    @staticmethod
+    def hash_secret(secret: str) -> str:
+        """对密钥进行加盐哈希。
+
+        Args:
+            secret: 原始密钥。
+
+        Returns:
+            str: "salt:hash" 格式的哈希串。
+        """
+        salt = secrets.token_hex(16)
+        h = hashlib.sha256((salt + secret).encode()).hexdigest()
+        return f"{salt}:{h}"
+
     @staticmethod
     def verify_secret(secret: str, hashed: str) -> bool:
-        """
-        验证密钥是否匹配
-        
+        """验证密钥是否匹配哈希值。
+
         Args:
-            secret: 明文密钥
-            hashed: 哈希后的密钥
-            
+            secret: 原始密钥。
+            hashed: "salt:hash" 格式的哈希串。
+
         Returns:
-            是否匹配
+            bool: 是否匹配。
         """
         try:
-            salt, expected_hash = hashed.split(':', 1)
-            combined = f"{salt}:{secret}"
-            actual_hash = hashlib.sha256(combined.encode()).hexdigest()
-            return hmac.compare_digest(actual_hash, expected_hash)
+            salt, h = hashed.split(':', 1)
+            expected = hashlib.sha256((salt + secret).encode()).hexdigest()
+            return hmac.compare_digest(expected, h)
         except Exception:
             return False
-    
+
     @staticmethod
-    def mask_secret(secret: str, visible_chars: int = 4) -> str:
-        """
-        遮蔽密钥，仅显示部分字符
-        
+    def mask_secret(secret: str) -> str:
+        """脱敏显示密钥。
+
         Args:
-            secret: 密钥
-            visible_chars: 显示的字符数
-            
+            secret: 原始密钥。
+
         Returns:
-            遮蔽后的字符串
+            str: 脱敏后的字符串（前4后4可见，中间*）。
         """
-        if len(secret) <= visible_chars * 2:
-            return "*" * len(secret)
-        
-        return f"{secret[:visible_chars]}{'*' * (len(secret) - visible_chars * 2)}{secret[-visible_chars:]}"
+        if len(secret) <= 8:
+            return '*' * 5
+        return secret[:4] + '*' * (len(secret) - 8) + secret[-4:]
 
 
-# ============ Rate Limiter ============
+# ============ RateLimiter ============
 
 class RateLimiter:
-    """简单的速率限制器"""
-    
-    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
-        """
-        Args:
-            max_requests: 时间窗口内最大请求数
-            window_seconds: 时间窗口（秒）
-        """
+    """速率限制器 — 基于滑动窗口的请求频率控制。"""
+
+    def __init__(self, max_requests: int, window_seconds: float):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self._requests: dict = {}
-    
+        self._windows: Dict[str, List[float]] = {}
+
     def is_allowed(self, key: str) -> bool:
-        """
-        检查是否允许请求
-        
+        """检查指定 key 的请求是否允许。
+
         Args:
-            key: 请求标识（如用户 ID、IP 等）
-            
+            key: 标识符（如用户 ID）。
+
         Returns:
-            是否允许
+            bool: 是否允许此次请求。
         """
-        import time
-        current_time = time.time()
-        
+        now = time.time()
+        if key not in self._windows:
+            self._windows[key] = []
+
         # 清理过期记录
-        if key in self._requests:
-            self._requests[key] = [
-                t for t in self._requests[key]
-                if current_time - t < self.window_seconds
-            ]
-        else:
-            self._requests[key] = []
-        
-        # 检查是否超限
-        if len(self._requests[key]) >= self.max_requests:
+        cutoff = now - self.window_seconds
+        self._windows[key] = [t for t in self._windows[key] if t > cutoff]
+
+        if len(self._windows[key]) >= self.max_requests:
             return False
-        
-        # 记录请求
-        self._requests[key].append(current_time)
+
+        self._windows[key].append(now)
         return True
-    
+
     def get_remaining(self, key: str) -> int:
-        """获取剩余请求数"""
-        import time
-        current_time = time.time()
-        
-        if key not in self._requests:
+        """获取指定 key 的剩余可用请求数。
+
+        Args:
+            key: 标识符。
+
+        Returns:
+            int: 剩余请求数。
+        """
+        now = time.time()
+        if key not in self._windows:
             return self.max_requests
-        
-        valid_requests = [
-            t for t in self._requests[key]
-            if current_time - t < self.window_seconds
-        ]
-        
-        return max(0, self.max_requests - len(valid_requests))
+
+        cutoff = now - self.window_seconds
+        self._windows[key] = [t for t in self._windows[key] if t > cutoff]
+        return max(0, self.max_requests - len(self._windows[key]))
 
 
-# ============ Default Instances ============
-
-# 默认 URL 验证器实例
-default_url_validator = URLValidator()
-
-# 默认文件路径验证器实例（需要在使用前设置 allowed_directories）
-default_file_validator = FilePathValidator()
-
-# 默认速率限制器
-default_rate_limiter = RateLimiter()
-
-
-# ============ Convenience Functions ============
+# ============ 便捷函数 ============
 
 def validate_url(url: str, **kwargs) -> str:
-    """便捷函数：验证 URL"""
-    validator = URLValidator(**kwargs) if kwargs else default_url_validator
+    """便捷的 URL 验证函数。
+
+    Args:
+        url: 待验证的 URL。
+        **kwargs: 传递给 URLValidator 的参数。
+
+    Returns:
+        str: 通过验证的 URL。
+    """
+    validator = URLValidator(**kwargs)
     return validator.validate(url)
 
 
-def validate_file_path(path: str, allowed_dirs: List[str], **kwargs) -> Path:
-    """便捷函数：验证文件路径"""
-    validator = FilePathValidator(allowed_directories=allowed_dirs, **kwargs)
+def validate_file_path(path: str, allowed_directories: List[str], **kwargs) -> Path:
+    """便捷的文件路径验证函数。
+
+    Args:
+        path: 待验证的路径。
+        allowed_directories: 允许的目录列表。
+        **kwargs: 传递给 FilePathValidator 的参数。
+
+    Returns:
+        Path: 解析后的路径。
+    """
+    validator = FilePathValidator(
+        allowed_directories=allowed_directories, **kwargs,
+    )
     return validator.validate(path)
 
 
-def sanitize_input(value: str, max_length: int = 10000) -> str:
-    """便捷函数：清理输入"""
-    return InputValidator.validate_string(value, max_length=max_length)
+def sanitize_input(text: str) -> str:
+    """便捷的输入清理函数。
+
+    Args:
+        text: 待清理的文本。
+
+    Returns:
+        str: 通过验证的文本。
+
+    Raises:
+        ValueError: 输入无效时抛出。
+    """
+    return InputValidator.validate_string(text)

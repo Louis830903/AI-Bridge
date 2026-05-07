@@ -5,140 +5,100 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] — 铸盾·生产就绪 (2026-05-07)
+
+### Phase IV 变更
 
 ### Added
-- `ai-bridge doctor` - 环境诊断命令，一键检查依赖和配置
-- `ai-bridge init` - 交互式配置向导，快速生成配置文件
-- Docker 支持 - Dockerfile 和 docker-compose.yml
-- Prometheus + Grafana 可选监控栈
-
-### Fixed
-- Dockerfile 构建顺序错误，先复制源码再执行 pip install
-- Office 检测中 COM 对象资源泄漏，添加 finally 块确保资源释放
-- init_wizard.py yaml 导入异常处理逻辑错误
-- Windows 上磁盘空间检测路径错误（现在使用当前驱动器）
-- init_wizard 用户输入无效值时缺少提示
-- basic_usage.py 版本号不一致（统一为 v5.0）
-- 未使用的导入和重复导入问题
-
-### Security
-- docker-compose Grafana 密码改为环境变量配置 `${GRAFANA_ADMIN_PASSWORD:-admin}`
-
-## [4.0.0] - 2026-03-15
-
-### Added
-- **Enterprise Management Layer** - Complete enterprise-grade capabilities
-- **Policy Engine (PBAC)** - Tool-level permission control with deny/allow rules
-  - Role-based policies with wildcard pattern matching
-  - Real-time policy evaluation with audit logging
-  - Support for conditions and context-aware access control
-- **Metering System** - Call cost tracking and quota management
-  - Per-tool cost configuration with custom pricing
-  - User/tenant quota limits with automatic enforcement
-  - Usage statistics and billing integration support
-- **Distributed Tracing** - OpenTelemetry-compatible tracing
-  - Span hierarchy with parent-child relationships
-  - Multiple exporters (Console, InMemory, extensible)
-  - Automatic context propagation across service boundaries
-- **Multi-Agent Orchestrator** - DAG-based task execution engine
-  - TaskGraph with dependency resolution and cycle detection
-  - Parallel execution with configurable concurrency
-  - Task state management (PENDING, RUNNING, COMPLETED, FAILED, CANCELLED)
-  - Agent registry for dynamic agent discovery
-- **Protocol Bridge Enhancement** - Bidirectional MCP ↔ A2A conversion
-  - Full message type mapping between protocols
-  - Streaming support for both directions
-  - Error and status code translation
+- 🧪 **分层测试金字塔**: L0 单元(907) / L1 组件(22) / L2 集成(7) / L3 E2E(8) 四级测试体系
+- **pytest 分层标记基础设施** (`tests/conftest.py`): --integration / --e2e / --perf CLI 开关
+- **L1 组件测试**: intent_pipeline, dag_orchestrator, protocol_bridge, pbac_engine
+- **L2 集成测试**: office_real (docx/pdf/xlsx/ppt), git_real (init/status/commit)
+- **L3 E2E 测试**: full_chain (自然语言→适配器), performance (延时/冷启动/批量注册)
+- 🛡️ **铁幕 CI 管线** (`.github/workflows/iron-curtain.yml`): L0 lint+unit / L2 docker-integration / L3 nightly E2E / L4 benchmark
+- 📊 **性能回归检测**: `scripts/check_benchmark_regression.py` (微基准 + 阈值告警)
 
 ### Changed
-- Architecture upgraded to support enterprise workloads
-- Test coverage expanded to 473+ test cases
+- 版本号升级至 `1.0.0` (正式发布)
+- 安全审查 9/9 项确认为前期已完成
+- SUPER_EVOLUTION_PLAN.md 更新至 Phase IV 完成状态
+
+---
+
+## [0.9.0-rc1] — 涅槃·秩序重生 (2026-05-07)
+
+### 史诗回溯
+
+本版本合并了 v1.0 → v5.0 的历史演进，以下是里程碑摘要：
+
+#### v5.0 企业级能力 (2026 Q1)
+- **新增**: PBAC 策略引擎 (`enterprise/policy.py`, ~400行)
+- **新增**: Metering 计量系统 (`enterprise/metering.py`, `metering_prometheus.py`)
+- **新增**: Audit 审计日志 (`enterprise/audit.py`, `audit_log.py`)
+- **新增**: Rate Limiting (`enterprise/rate_limit.py`)
+- **新增**: OpenTelemetry 全链路追踪 (`enterprise/tracing.py`)
+- **新增**: Health Check 端点 (`enterprise/health.py`)
+- **新增**: CLI 工具 (`cli/doctor.py`, `cli/init_wizard.py`)
+- **新增**: Docker 支持 (Dockerfile, docker-compose.yml)
+- **新增**: 全面安全审计与加固 (22 项 P0-P3 修复)
+- **新增**: CSS 选择器验证 (42 项安全测试)
+- **新增**: 速率限制与密钥管理工具 (`utils/security.py`)
+
+#### v4.0 协议扩展 (2025 Q4)
+- **新增**: A2A Gateway (`gateway/a2a_gateway.py`, `protocol_bridge.py`)
+- **新增**: Agent Card 发布与发现 (`gateway/agent_card.py`, `card_publisher.py`, `card_discovery.py`)
+- **新增**: MCP Registry (`gateway/mcp_registry.py`, `mcp_discovery.py`)
+- **新增**: Prometheus 指标导出 (`enterprise/prometheus.py`)
+- **新增**: A2A Streaming (`registry/a2a_streaming.py`)
+- **新增**: Agent Registry (`registry/agent_registry.py`)
+
+#### v3.0 核心重构 (2025 Q3)
+- **新增**: IntentEngine 意图引擎 (`core/intent_engine.py`)
+- **新增**: Batch Executor (`core/batch_executor.py`)
+- **新增**: Smart Wait (`core/smart_wait.py`)
+- **新增**: Multi-modal 支持 (`core/multimodal.py`)
+- **新增**: LLM Provider 抽象层 (`core/llm_provider.py`)
+- **新增**: 统一异常体系 (`core/exceptions.py`)
+
+#### v2.0 适配器扩展 (2025 Q2)
+- **新增**: CLI 适配器体系 (aider, blender, docker, ffmpeg, gimp, imagemagick, libreoffice, pandoc, playwright, prettier, shotcut)
+- **新增**: Browser 适配器 (chrome.py, edge.py)
+- **新增**: Office 适配器 (word, excel, ppt)
+- **新增**: MCP 连接器 (HTTP/SSE/stdio)
+
+#### v1.0 基础框架 (2025 Q1)
+- **新增**: MCP Server (`server/mcp_server.py`, `mcp_tools.py`)
+- **新增**: 核心配置系统 (`core/config.py`, `adapter_config.py`)
+- **新增**: Session Manager (`core/session_manager.py`)
+- **新增**: 安全模块 (`core/security.py`)
+
+### Phase I 变更
+
+### Changed
+- 版本号从 `0.1.0-alpha` 校准为 `0.9.0-rc1`
+- Python 最低版本提升至 3.10
+- 依赖分组重构：`office-win`、`office-cross`、`browser`、`media`、`dev`、`all`
+- 统一异常体系扩展为 6 类 17 子类，含结构化错误码
+- ruff 配置升级，新增 SIM/TCH 规则 + isort/format 配置
+
+### Added
+- 旧字典错误兼容层 (`core/legacy_error_wrapper.py`)
+- 错误迁移回归测试 (`tests/test_error_migration.py`)
+- CODEOWNERS 模块归属声明 (`.github/CODEOWNERS`)
 
 ### Fixed
-- KeyError in orchestrator validate() when dependencies reference non-existent tasks
-
-## [2.6.1] - 2026-03-13
-
-### Added
-- Shared LLM Architecture - AI-Bridge can now share LLM resources with the host AI agent
-- LLMProvider abstract interface supporting OpenAI, Claude, and local models
-- Automatic fallback to rule-based mode when LLM is unavailable
-
-### Fixed
-- Target object conversion in ChromeAdapter (now supports both dict and Target objects)
-- A11y snapshot element caching issue
-
-## [2.6.0] - 2026-03-12
-
-### Added
-- Session Management (SessionManager) - Persistent browser sessions
-- Smart Wait/Retry (SmartWait) - Intelligent waiting and retry logic
-- Batch Parallel Operations (BatchExecutor) - Execute multiple actions in parallel
-- Multi-modal Input/Output (MultiModal) - Support for images, audio, and text
-- Security Sandbox (SecurityPolicy) - Permission control and sandboxing
-- Intent Recognition Engine - Natural language to action mapping
-- O-R-A Loop Orchestrator - Observe-Reason-Action task planning
-
-## [2.5.0] - 2026-03-12
-
-### Added
-- MCP Server support - Compatible with Model Context Protocol
-- Browser automation task engine
-- Universal nurture engine with 15+ platforms semantic matching
-- Price tracking automation
-- Auto check-in functionality
-- Multi-platform publish capability
-- Auto-play courses feature
-
-## [2.4.0] - 2026-03-12
-
-### Added
-- `extract` action for structured data extraction from web pages
-- Support for custom schema extraction
-- `multiple` parameter for batch data extraction
-- Unified response format: `{success, action, data, summary, metadata}`
-
-## [2.3.2] - 2026-03-12
-
-### Fixed
-- `_format_snapshot` recursion issue
-- A11y snapshot type safety
-
-## [2.3.1] - 2026-03-12
-
-### Added
-- `force` parameter support for hidden element operations
-- Fixed A11y snapshot type safety issues
-
-## [2.3.0] - 2026-03-12
-
-### Added
-- Multi-strategy element location fallback
-- A11y snapshot DOM fallback
-- JS execution return value handling
-- Baidu search box input/click working with `force=True`
-- A11y snapshot returning 32+ elements with UID markers
-
-### Performance
-- 3-site navigation in 2.36 seconds (benchmark)
-
-## [2.2.1] - 2026-03-11
-
-### Added
-- Base adapter implementation
-- ChromeAdapter with Playwright
-- Core protocol definitions (Action, Target, Request, Response)
-- AdapterManager for unified management
-- Initial test suite
+- `core/config.py` `from_dict` 方法副作用修复 (pop → get)
+- `server/mcp_server.py` 重复属性定义清理
+- `core/manager.py` 异常吞噬添加日志、重复注册检查
+- `core/session_manager.py` 封装破坏修复
 
 ---
 
 ## Release Notes Format
 
-### Added - New features
-### Changed - Changes in existing functionality
-### Deprecated - Soon-to-be removed features
-### Removed - Now removed features
-### Fixed - Bug fixes
-### Security - Security improvements
+### Added — New features
+### Changed — Changes in existing functionality
+### Deprecated — Soon-to-be removed features
+### Removed — Now removed features
+### Fixed — Bug fixes
+### Security — Security improvements

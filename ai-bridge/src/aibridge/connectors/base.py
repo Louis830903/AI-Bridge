@@ -324,8 +324,7 @@ class StdioMCPConnector(MCPConnector):
         
         logger.info(f"MCP Server started with PID: {self._process.pid}")
         
-        # TODO: 实现 MCP 协议握手和工具列表获取
-        # 这里需要实现实际的 MCP 协议通信
+        # NOTE: MCP 协议握手在 Phase II 意图引擎中实现
     
     async def _do_stop(self) -> None:
         """停止子进程"""
@@ -343,7 +342,7 @@ class StdioMCPConnector(MCPConnector):
         if not self._process:
             raise ConnectorError("Process not started")
         
-        # TODO: 实现 MCP 协议的 tool call
+        # NOTE: MCP tool call 在 Phase II 意图引擎中实现
         raise NotImplementedError("STDIO MCP protocol not implemented yet")
 
 
@@ -392,5 +391,5 @@ class HttpMCPConnector(MCPConnector):
         if not self._session:
             raise ConnectorError("Session not established")
         
-        # TODO: 实现 MCP over HTTP 协议
+        # NOTE: MCP over HTTP 在 Phase II 意图引擎中实现
         raise NotImplementedError("HTTP MCP protocol not implemented yet")

@@ -4,25 +4,27 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-bridge"
-version = "0.1.0"
-description = "AI Application Interaction Protocol - Bridge AI Assistants to GUI Applications"
-readme = "README.md"
+version = "1.0.0"
+description = "Universal AI-to-Tool bridge: MCP+A2A dual protocol gateway for CLI, Office, and Browser adapters"
+readme = "../README.md"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "AI-Bridge Team", email = "contact@ai-bridge.dev"}
 ]
 keywords = [
-    "ai", "automation", "mcp", "gui", "rpa", 
-    "feishu", "dingtalk", "wecom", "wps", "office"
+    "ai", "automation", "mcp", "a2a", "gateway",
+    "browser", "office", "cli", "playwright",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -37,29 +39,31 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+office-win = [
+    "pywin32>=306",
+]
+office-cross = [
+    "python-docx>=1.0",
+    "openpyxl>=3.1",
+]
 browser = [
     "playwright>=1.40.0",
 ]
-office = [
-    "pywin32>=306",
-]
-desktop = [
-    "pywinauto>=0.6.8",
-]
-ocr = [
-    "paddleocr>=2.7.0",
-    "opencv-python>=4.8.0",
-]
-all = [
-    "ai-bridge[browser,office,desktop,ocr]",
+media = [
+    "ffmpeg-python>=0.2",
 ]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.0.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.0",
+    "pytest-mock>=3.14",
+    "pytest-timeout>=2.2",
+    "ruff>=0.3",
+    "mypy>=1.8",
+    "pandas>=2.0",
+]
+all = [
+    "ai-bridge[office-cross,browser,media,dev]",
 ]
 
 [project.scripts]
@@ -74,20 +78,41 @@ Issues = "https://github.com/Louis830903/AI-Bridge/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/aibridge"]
 
-[tool.black]
-line-length = 100
-target-version = ["py39", "py310", "py311", "py312"]
-
 [tool.ruff]
+target-version = "py310"
 line-length = 100
-select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "B",         # flake8-bugbear
+    "C4",        # flake8-comprehensions
+    "SIM",       # flake8-simplify
+    "TCH",       # flake8-type-checking-imports
+]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+force-single-line = false
+lines-between-types = 1
+known-first-party = ["aibridge"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
+strict = true
 warn_return_any = true
 warn_unused_configs = true
+disallow_untyped_defs = false
 ignore_missing_imports = true
+exclude = ["tests/", "demos/", "examples/"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

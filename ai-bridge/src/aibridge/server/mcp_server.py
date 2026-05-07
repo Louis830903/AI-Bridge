@@ -16,8 +16,12 @@ MCP (Model Context Protocol) 是 Anthropic 推出的标准协议，
 import asyncio
 import json
 import logging
+import socket
+import ipaddress
 from typing import Any, Dict, List, Optional, Callable
 from dataclasses import dataclass, field
+
+from aibridge.utils.security import validate_css_selector
 
 # MCP 协议相关类型（如果不安装mcp包，使用简化版本）
 try:
@@ -200,13 +204,13 @@ class AIBridgeMCPServer:
     支持 Claude Desktop、Cursor、Cline 等 MCP 客户端。
     """
     
-    def __init__(self):
+    def __init__(self, allow_private_ips: bool = False):
         self.adapter: Optional[ChromeAdapter] = None
         self.intent_engine: Optional[IntentEngine] = None
         self.orchestrator: Optional[Orchestrator] = None
         self._connected = False
         self._shutdown_event: Optional[asyncio.Event] = None
-        self._shutdown_event: Optional[asyncio.Event] = None
+        self._allow_private_ips = allow_private_ips
     
     async def initialize(self):
         """初始化所有组件"""
@@ -252,14 +256,15 @@ class AIBridgeMCPServer:
             }
         return None
     
-    def _validate_url(self, url: str) -> tuple[bool, str]:
+    async def _validate_url(self, url: str) -> tuple[bool, str]:
         """
-        验证 URL 安全性
+        验证 URL 安全性，防止 SSRF 攻击
         
         检查：
         - URL 存在性
         - 协议限制 (http/https)
         - 主机名有效性
+        - 内网/私有地址检测（异步 DNS 解析，不阻塞事件循环）
         
         Returns:
             (is_valid, error_message)
@@ -287,37 +292,41 @@ class AIBridgeMCPServer:
             if not parsed.netloc:
                 return False, "URL 缺少主机名"
             
+            hostname = parsed.hostname
+            if not hostname:
+                return False, "无法解析主机名"
+            
+            # 检查是否为内网地址（异步 DNS 解析）
+            if not self._allow_private_ips:
+                try:
+                    loop = asyncio.get_running_loop()
+                    addr_info = await loop.run_in_executor(
+                        None, socket.getaddrinfo, hostname, None
+                    )
+                    ip = addr_info[0][4][0]
+                    addr = ipaddress.ip_address(ip)
+                    
+                    if addr.is_loopback:
+                        return False, f"不允许访问回环地址: {hostname}"
+                    if addr.is_private:
+                        return False, f"不允许访问内网地址: {hostname}"
+                    if addr.is_link_local:
+                        return False, f"不允许访问本地链路地址: {hostname}"
+                    if addr.is_multicast:
+                        return False, f"不允许访问多播地址: {hostname}"
+                    if addr.is_unspecified:
+                        return False, f"不允许访问未指定地址: {hostname}"
+                except (socket.gaierror, ValueError) as e:
+                    return False, f"DNS 解析失败: {hostname} ({e})"
+            
             return True, ""
             
         except Exception as e:
             return False, f"URL 解析错误: {e}"
     
     def _validate_selector(self, selector: str) -> tuple[bool, str]:
-        """验证 CSS 选择器安全性"""
-        if not selector:
-            return True, ""  # 空选择器允许（可能使用其他定位方式）
-        
-        if not isinstance(selector, str):
-            return False, "选择器必须是字符串"
-        
-        # 长度限制
-        if len(selector) > 500:
-            return False, "选择器过长"
-        
-        # 禁止危险字符
-        dangerous = ['<', '>', '{', '}', ';', '`', '\x00', '\n', '\r']
-        for char in dangerous:
-            if char in selector:
-                return False, f"选择器包含不允许的字符: {repr(char)}"
-        
-        # 禁止危险模式
-        dangerous_patterns = ['javascript:', 'expression(', 'eval(']
-        selector_lower = selector.lower()
-        for pattern in dangerous_patterns:
-            if pattern in selector_lower:
-                return False, f"选择器包含不允许的模式: {pattern}"
-        
-        return True, ""
+        """验证 CSS 选择器安全性 — 委托到 aibridge.utils.security"""
+        return validate_css_selector(selector, allow_empty=True)
     
     def _validate_wait_until(self, wait_until: str) -> tuple[bool, str]:
         """验证 wait_until 参数"""
@@ -336,7 +345,7 @@ class AIBridgeMCPServer:
         wait_until = args.get("wait_until", "domcontentloaded")
         
         # URL 验证
-        valid, err = self._validate_url(url)
+        valid, err = await self._validate_url(url)
         if not valid:
             return {"success": False, "error": err}
         
@@ -465,6 +474,9 @@ class AIBridgeMCPServer:
     
     async def handle_screenshot(self, args: dict) -> dict:
         """处理截图请求"""
+        if error := await self._check_initialized():
+            return error
+        
         selector = args.get("selector")
         full_page = args.get("full_page", False)
         
@@ -490,6 +502,9 @@ class AIBridgeMCPServer:
     
     async def handle_execute_intent(self, args: dict) -> dict:
         """处理意图执行请求（第2层：意图识别）"""
+        if error := await self._check_initialized():
+            return error
+        
         intent = args.get("intent")
         context = args.get("context", {})
         
@@ -505,6 +520,9 @@ class AIBridgeMCPServer:
     
     async def handle_execute_task(self, args: dict) -> dict:
         """处理复杂任务请求（第3层：O-R-A循环）"""
+        if error := await self._check_initialized():
+            return error
+        
         goal = args.get("goal")
         max_steps = args.get("max_steps", 10)
         callback_url = args.get("callback_url")

@@ -1,25 +1,45 @@
 """
-意图识别引擎 (Intent Engine)
+意图识别引擎 (Intent Engine) - v2.0
+
+三级意图解析流水线:
+L1: 精确模式匹配 → L2: 语义搜索 → L3: LLM 理解回退
 
 将自然语言意图转换为结构化操作。
 支持两种模式:
 1. 规则匹配模式 - 基于关键词和模式匹配（无需LLM）
 2. LLM模式 - 使用大语言模型理解复杂意图（可选）
 
+Phase II — 意图引擎通用化 (v0.10.0)
+
 示例:
 - "搜索iPhone 15" → goto("https://search.xxx") + type("#search", "iPhone 15") + click("#submit")
 - "点击提交按钮" → click({"text": "提交"})
 - "提取所有商品价格" → extract({"css": ".price"}, {"price": "number"}, multiple=True)
+- "把video.mp4转成gif" → L1命中 ffmpeg.convert 模式
 """
+
+from __future__ import annotations
 
 import re
 import json
+import asyncio
+import time
 import logging
-from typing import Any, Dict, List, Optional, Callable, Tuple
+from typing import Any, Dict, List, Optional, Callable, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
 from enum import Enum
 
-from aibridge.adapters.browser.chrome import ChromeAdapter
+if TYPE_CHECKING:
+    from aibridge.adapters.browser.chrome import ChromeAdapter
+    from aibridge.core.llm_provider import LLMProvider
+
+from aibridge.adapters.base import BaseAdapter
+from aibridge.core.domain_registry import DomainIntentRegistry
+from aibridge.core.intent_pattern import (
+    IntentMatch,
+    CompositeIntent,
+    IntentPattern as ProtocolIntentPattern,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +88,7 @@ class IntentPattern:
         self,
         intent_type: IntentType,
         patterns: List[str],
-        handler: Callable[[re.Match, 'ChromeAdapter'], List[ActionStep]]
+        handler: Callable[[re.Match, BaseAdapter], List[ActionStep]]
     ):
         self.intent_type = intent_type
         self.patterns = [re.compile(p, re.IGNORECASE) for p in patterns]
@@ -85,7 +105,15 @@ class IntentPattern:
 
 # ============ 意图处理器 ============
 
-def handle_navigate(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
+# 模块级搜索引擎配置
+SEARCH_ENGINES = {
+    "baidu": {"search_box": "#kw", "search_btn": "#su"},
+    "google": {"search_box": "input[name='q']", "search_btn": "input[name='btnK']"},
+    "bing": {"search_box": "#sb_form_q", "search_btn": "#sb_form_go"},
+}
+
+
+def handle_navigate(match: re.Match, adapter: BaseAdapter) -> List[ActionStep]:
     """处理导航意图"""
     url = match.group(1)
     # 自动补全协议
@@ -99,29 +127,31 @@ def handle_navigate(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]
     )]
 
 
-def handle_search(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
-    """处理搜索意图"""
+def handle_search(match: re.Match, adapter: BaseAdapter) -> List[ActionStep]:
+    """处理搜索意图 — 支持多搜索引擎配置"""
     keyword = match.group(1)
+    # 从 adapter 获取搜索引擎配置（如果可用），否则默认百度
+    engine = getattr(adapter, '_search_engine', None) or 'baidu'
+    config = SEARCH_ENGINES.get(engine, SEARCH_ENGINES["baidu"])
     
-    # 尝试在常见搜索框输入
     return [
         ActionStep(
             action="type",
-            target={"css": "#kw"},  # 百度搜索框
+            target={"css": config["search_box"]},
             value=keyword,
             options={"force": True},
             description=f"在搜索框输入: {keyword}"
         ),
         ActionStep(
             action="click",
-            target={"css": "#su"},  # 百度搜索按钮
+            target={"css": config["search_btn"]},
             options={"force": True},
             description="点击搜索按钮"
         )
     ]
 
 
-def handle_click(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
+def handle_click(match: re.Match, adapter: BaseAdapter) -> List[ActionStep]:
     """处理点击意图"""
     target_text = match.group(1)
     
@@ -133,7 +163,7 @@ def handle_click(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
     )]
 
 
-def handle_type(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
+def handle_type(match: re.Match, adapter: BaseAdapter) -> List[ActionStep]:
     """处理输入意图"""
     field_hint = match.group(1)  # 字段提示（如"搜索框"、"用户名"）
     text = match.group(2)
@@ -158,7 +188,7 @@ def handle_type(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
     )]
 
 
-def handle_extract(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
+def handle_extract(match: re.Match, adapter: BaseAdapter) -> List[ActionStep]:
     """处理提取意图"""
     field_name = match.group(1)
     
@@ -182,7 +212,7 @@ def handle_extract(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
     )]
 
 
-def handle_scroll(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
+def handle_scroll(match: re.Match, adapter: BaseAdapter) -> List[ActionStep]:
     """处理滚动意图"""
     direction = match.group(1).lower() if match.group(1) else "down"
     
@@ -191,6 +221,20 @@ def handle_scroll(match: re.Match, adapter: ChromeAdapter) -> List[ActionStep]:
         value=direction,
         description=f"向{direction}滚动页面"
     )]
+
+
+# ============ 意图引擎 v2.0 流水线配置 ============
+
+@dataclass
+class IntentPipelineConfig:
+    """三级流水线配置"""
+    l1_timeout_ms: int = 50         # L1 精确匹配超时
+    l2_timeout_ms: int = 500        # L2 语义搜索超时
+    l3_timeout_ms: int = 5000       # L3 LLM 超时
+    l2_top_k: int = 5               # 语义搜索返回数量
+    l2_min_confidence: float = 0.5  # L2 最低置信度
+    l3_auto_register: bool = False  # 是否自动注册新模式
+    l3_register_threshold: float = 0.8  # 自动注册置信阈值
 
 
 # ============ 意图引擎 ============
@@ -266,10 +310,17 @@ class IntentEngine:
         ),
     ]
     
-    def __init__(self, adapter: ChromeAdapter, llm_provider=None):
+    # 默认超时配置（秒），可被实例属性覆盖
+    DEFAULT_EXECUTE_TIMEOUT = 120.0  # 意图解析+执行总超时
+    DEFAULT_STEP_TIMEOUT = 30.0      # 单步操作超时
+
+    def __init__(self, adapter: BaseAdapter, llm_provider=None):
         self.adapter = adapter
         self.llm_provider = llm_provider
         self.use_llm = llm_provider is not None
+        self._execute_timeout = self.DEFAULT_EXECUTE_TIMEOUT
+        self._stats = {"l1_hits": 0, "l2_hits": 0, "l3_hits": 0, "misses": 0}
+        self._registry: DomainIntentRegistry | None = None
     
     async def initialize(self):
         """初始化意图引擎"""
@@ -373,7 +424,6 @@ class IntentEngine:
 只返回JSON，不要其他解释。"""
             
             # 调用共享的LLM，添加超时保护（默认30秒）
-            import asyncio
             try:
                 response = await asyncio.wait_for(
                     self.llm_provider.complete(
@@ -437,17 +487,35 @@ class IntentEngine:
                 error=f"LLM调用失败: {e}"
             )
     
-    async def execute(self, intent_text: str, context: Optional[Dict] = None) -> Dict:
+    async def execute(self, intent_text: str, context: Optional[Dict] = None,
+                      timeout: Optional[float] = None) -> Dict:
         """
-        解析并执行意图
+        解析并执行意图，带全局超时保护
         
         Args:
             intent_text: 自然语言意图
             context: 上下文信息
+            timeout: 单次调用超时（秒），None 则使用实例默认值
         
         Returns:
             执行结果
         """
+        effective_timeout = timeout if timeout is not None else self._execute_timeout
+        try:
+            return await asyncio.wait_for(
+                self._execute_internal(intent_text, context),
+                timeout=effective_timeout
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"意图执行超时（{effective_timeout}秒）: {intent_text}")
+            return {
+                "success": False,
+                "error": f"意图执行超时（{effective_timeout}秒）",
+                "intent": intent_text
+            }
+
+    async def _execute_internal(self, intent_text: str, context: Optional[Dict] = None) -> Dict:
+        """内部执行逻辑（实际执行意图步骤）"""
         # 解析意图
         intent_result = await self.parse(intent_text)
         
@@ -497,7 +565,187 @@ class IntentEngine:
             "data": last_data,
             "summary": intent_result.summary
         }
+
+    def set_timeout(self, seconds: float):
+        """动态调整超时时间
+        
+        Args:
+            seconds: 超时秒数
+        """
+        self._execute_timeout = seconds
     
+    # ========== v2.0 三级意图解析流水线 ==========
+
+    async def resolve(
+        self,
+        user_input: str,
+        domain: str | None = None,
+        registry: DomainIntentRegistry | None = None,
+        config: IntentPipelineConfig | None = None,
+    ) -> IntentMatch | CompositeIntent | None:
+        """三级流水线解析用户意图。
+
+        Args:
+            user_input: 自然语言输入
+            domain: 限定的领域 (可选)
+            registry: 外部注册中心（为 None 则使用内部注册中心）
+            config: 流水线配置（为 None 则使用默认配置）
+
+        Returns:
+            IntentMatch (单意图), CompositeIntent (复合意图), 或 None
+
+        Raises:
+            IntentRouteError: 所有级别都失败时
+        """
+        cfg = config or IntentPipelineConfig()
+        reg = registry or getattr(self, '_registry', None)
+        if reg is None:
+            logger.debug("No registry configured, falling back to rule-based parse")
+            return None
+
+        # L1: 精确模式匹配
+        result = await self._resolve_l1(user_input, domain, reg, cfg)
+        if result:
+            self._stats["l1_hits"] = self._stats.get("l1_hits", 0) + 1
+            return result
+
+        # L2: 语义搜索
+        result = await self._resolve_l2(user_input, reg, cfg)
+        if result:
+            self._stats["l2_hits"] = self._stats.get("l2_hits", 0) + 1
+            return result
+
+        # L3: LLM 回退
+        if self.llm_provider:
+            result = await self._resolve_l3(user_input, reg, cfg)
+            if result:
+                self._stats["l3_hits"] = self._stats.get("l3_hits", 0) + 1
+                return result
+
+        self._stats["misses"] = self._stats.get("misses", 0) + 1
+        return None
+
+    async def _resolve_l1(
+        self,
+        user_input: str,
+        domain: str | None,
+        registry: DomainIntentRegistry,
+        config: IntentPipelineConfig,
+    ) -> IntentMatch | None:
+        """L1: 精确模式匹配——基于注册的模板"""
+        try:
+            matches = await asyncio.wait_for(
+                asyncio.to_thread(registry.match, user_input, domain),
+                timeout=config.l1_timeout_ms / 1000,
+            )
+            if matches and matches[0].confidence >= matches[0].pattern.confidence_threshold:
+                logger.debug(
+                    f"L1 hit: {matches[0].pattern.id} "
+                    f"(conf={matches[0].confidence:.2f})"
+                )
+                return matches[0]
+            if matches:
+                logger.debug(
+                    f"L1 low confidence: {matches[0].pattern.id} "
+                    f"(conf={matches[0].confidence:.2f} < "
+                    f"threshold={matches[0].pattern.confidence_threshold})"
+                )
+        except asyncio.TimeoutError:
+            logger.warning("L1 match timeout")
+        return None
+
+    async def _resolve_l2(
+        self,
+        user_input: str,
+        registry: DomainIntentRegistry,
+        config: IntentPipelineConfig,
+    ) -> IntentMatch | CompositeIntent | None:
+        """L2: 语义搜索 + 组合意图检测"""
+        try:
+            matches = await asyncio.wait_for(
+                asyncio.to_thread(
+                    registry.semantic_search, user_input, config.l2_top_k
+                ),
+                timeout=config.l2_timeout_ms / 1000,
+            )
+            if not matches or matches[0].confidence < config.l2_min_confidence:
+                return None
+
+            # 检测是否为复合意图（多个高置信度匹配）
+            high_conf = [m for m in matches if m.confidence > 0.6]
+            if len(high_conf) >= 2:
+                logger.info(
+                    f"L2 composite intent detected: "
+                    f"{[m.pattern.id for m in high_conf]}"
+                )
+                return CompositeIntent(
+                    sub_intents=high_conf,
+                    dag={m.pattern.id: [] for m in high_conf},
+                    original_text=user_input,
+                )
+
+            logger.debug(
+                f"L2 hit: {matches[0].pattern.id} "
+                f"(conf={matches[0].confidence:.2f})"
+            )
+            return matches[0]
+        except asyncio.TimeoutError:
+            logger.warning("L2 semantic search timeout")
+        return None
+
+    async def _resolve_l3(
+        self,
+        user_input: str,
+        registry: DomainIntentRegistry,
+        config: IntentPipelineConfig,
+    ) -> IntentMatch | None:
+        """L3: LLM 理解 + 自动注册候选"""
+        try:
+            context = registry.to_prompt_context()
+            result = await asyncio.wait_for(
+                self.llm_provider.parse_intent(user_input, context),
+                timeout=config.l3_timeout_ms / 1000,
+            )
+            if result and result.confidence >= 0.5:
+                logger.info(f"L3 LLM resolved: {result.pattern.id}")
+
+                # 自动注册候选
+                if (
+                    config.l3_auto_register
+                    and result.confidence >= config.l3_register_threshold
+                ):
+                    logger.info(
+                        f"Auto-registering new pattern: {result.pattern.id}"
+                    )
+                    registry.register(result.pattern.adapter_id, [result.pattern])
+
+                return result
+        except asyncio.TimeoutError:
+            logger.error("L3 LLM timeout")
+        except Exception as e:
+            logger.error(f"L3 LLM error: {e}")
+        return None
+
+    def get_stats(self) -> dict:
+        """获取三级流水线统计"""
+        stats = {
+            "l1_hits": 0, "l2_hits": 0, "l3_hits": 0, "misses": 0
+        }
+        stats.update(self._stats)
+        total = max(sum(stats.values()), 1)
+        return {
+            **stats,
+            "total": total,
+            "l1_rate": stats["l1_hits"] / total,
+            "l2_rate": stats["l2_hits"] / total,
+            "l3_rate": stats["l3_hits"] / total,
+            "miss_rate": stats["misses"] / total,
+        }
+
+    def set_registry(self, registry: DomainIntentRegistry):
+        """设置意图注册中心"""
+        self._registry = registry
+
     def add_pattern(self, pattern: IntentPattern):
         """添加自定义规则模式"""
         # 安全：复制类变量到实例变量，避免修改类本身

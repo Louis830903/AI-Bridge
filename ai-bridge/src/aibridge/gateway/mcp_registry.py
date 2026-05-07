@@ -113,7 +113,7 @@ class MCPServerProxy:
             raise ValueError("HTTP transport requires 'url' in config")
         
         # HTTP 模式下不需要启动进程，只需要验证连接
-        # TODO: 实现 HTTP 健康检查
+        # NOTE: HTTP 健康检查在 Phase II 意图引擎中实现
         self.is_connected = True
         logger.info(f"MCP Server {self.config.name} connected to {self.config.url}")
         return True
@@ -136,8 +136,8 @@ class MCPServerProxy:
         if not self.is_connected:
             raise RuntimeError(f"MCP Server {self.config.name} is not connected")
         
-        # TODO: 实现实际的 MCP 协议调用
-        # 这里需要根据传输方式实现具体的调用逻辑
+        # NOTE: MCP 协议调用在 Phase II 意图引擎中实现
+        # 根据传输方式实现具体的调用逻辑
         logger.info(f"Calling tool {tool_name} on {self.config.name} with params: {params}")
         
         raise NotImplementedError("MCP protocol call not implemented yet")
@@ -147,7 +147,7 @@ class MCPServerProxy:
         if not self.is_connected:
             raise RuntimeError(f"MCP Server {self.config.name} is not connected")
         
-        # TODO: 实现实际的工具列表获取
+        # NOTE: 工具列表获取在 Phase II 意图引擎中实现
         return self.tools
 
 

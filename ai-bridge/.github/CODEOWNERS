@@ -1,0 +1,41 @@
+# CODEOWNERS - AI-Bridge Module Ownership
+# See: https://docs.github.com/en/repositories/configuring-branches-and-merges/about-code-owners
+
+# Core modules
+src/aibridge/core/          @ai-bridge/core-team
+
+# Adapter modules
+src/aibridge/adapters/      @ai-bridge/adapter-team
+
+# Gateway & Protocol modules
+src/aibridge/gateway/       @ai-bridge/gateway-team
+
+# Enterprise modules
+src/aibridge/enterprise/    @ai-bridge/enterprise-team
+
+# Server modules
+src/aibridge/server/        @ai-bridge/server-team
+
+# Utility modules
+src/aibridge/utils/         @ai-bridge/core-team
+
+# Connector modules
+src/aibridge/connectors/    @ai-bridge/gateway-team
+
+# Registry modules
+src/aibridge/registry/      @ai-bridge/gateway-team
+
+# CLI modules
+src/aibridge/cli/           @ai-bridge/core-team
+
+# Documentation
+docs/                       @ai-bridge/docs-team
+*.md                        @ai-bridge/docs-team
+
+# CI/CD
+.github/workflows/          @ai-bridge/devops-team
+
+# Project configuration
+pyproject.toml              @ai-bridge/core-team @ai-bridge/devops-team
+Dockerfile                  @ai-bridge/devops-team
+docker-compose.yml          @ai-bridge/devops-team

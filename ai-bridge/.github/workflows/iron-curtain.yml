@@ -1,0 +1,160 @@
+name: Iron Curtain CI
+
+# Phase IV v1.0.0 — 铁幕 CI: 分层测试 + 性能回归 + E2E
+# L0: lint + unit (push/PR)
+# L2: integration (push/PR, requires Docker)
+# L3: e2e + benchmark (cron nightly only)
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 每天凌晨 3:00 UTC 运行 E2E + 性能基准
+    - cron: '0 3 * * *'
+
+jobs:
+  # ── L0 铁幕第一层: Lint + Unit Tests ──
+  lint-and-unit:
+    name: "L0: Lint & Unit (${{ matrix.python-version }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,office-cross]"
+
+      - name: Lint with ruff
+        run: ruff check src/ tests/
+
+      - name: Type check with mypy
+        run: mypy src/
+
+      - name: Run unit tests (L0 — no integration/e2e)
+        run: pytest tests/ -v --tb=short --cov=src/aibridge --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: iron-curtain-unit
+          fail_ci_if_error: false
+
+  # ── L2 铁幕第二层: 集成测试 (Docker-in-Docker) ──
+  integration-docker:
+    name: "L2: Integration (Docker-in-Docker)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      docker:
+        image: docker:24-dind
+        options: --privileged
+        ports:
+          - 2375:2375
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg git imagemagick pandoc
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,office-cross,browser,media]"
+          playwright install-deps chromium
+          playwright install chromium
+
+      - name: Run integration tests (L2)
+        run: pytest tests/integration/ -v --tb=short --integration --timeout=120
+
+  # ── L3 铁幕第三层: E2E 夜间全链测试 ──
+  e2e-nightly:
+    name: "L3: E2E Nightly Full Chain"
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      docker:
+        image: docker:24-dind
+        options: --privileged
+        ports:
+          - 2375:2375
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg git imagemagick pandoc
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[all]"
+          playwright install-deps chromium
+          playwright install chromium
+
+      - name: Run E2E full chain tests (L3)
+        run: pytest tests/e2e/test_full_chain.py -v --tb=long --e2e --timeout=300
+
+      - name: Run performance benchmarks (L4)
+        run: pytest tests/e2e/test_performance.py -v --tb=short --perf --timeout=180
+
+  # ── L4 铁幕第四层: 性能回归检测 ──
+  benchmark-regression:
+    name: "L4: Benchmark Regression"
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run performance benchmark
+        run: python scripts/check_benchmark_regression.py
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.json
